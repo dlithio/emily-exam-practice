@@ -99,6 +99,42 @@ This is a Streamlit-based educational application that generates pandas and SQL 
 
 ---
 
+### `dataset_topics.py` (dataset variety library)
+**Location:** Root directory
+**Purpose:** Provides 100 diverse dataset topics for problem generation variety
+
+**Key Features:**
+- `DATASET_TOPICS` - List of 100 domain-only topic names
+- Topics organized by category for reference:
+  - Business (10): sales, customers, products, orders, employees, departments, retail, wholesale, consulting, suppliers
+  - Education (8): school, university, courses, tutoring, training, academy, library, workshop
+  - Technology (10): social-media, gaming, software, cloud, cybersecurity, analytics, database, networking, app-store, tech-support
+  - Healthcare (7): hospital, clinic, pharmacy, lab, telemedicine, dentist, veterinary
+  - Entertainment (8): movies, music, streaming, theater, concerts, festivals, gallery, museum
+  - Finance (8): banking, investments, insurance, budgeting, trading, loans, accounting, credit-cards
+  - Sports (8): basketball, soccer, tennis, olympics, fitness, marathon, gym, swimming
+  - E-commerce (6): marketplace, shopping, auctions, subscriptions, reviews, wishlist
+  - Transportation (7): flights, trains, rideshare, logistics, delivery, parking, shipping
+  - Food & Beverage (7): restaurant, cafe, catering, food-truck, bakery, grocery, meal-kit
+  - Real Estate (5): properties, rentals, mortgages, listings, property-management
+  - Travel (6): hotels, tours, bookings, cruises, travel-agency, vacation-rentals
+  - Manufacturing (5): factory, supply-chain, inventory, production, warehouse
+  - Media (5): news, publishing, podcasts, journalism, advertising
+- `get_random_topic()` - Returns a random topic from the library
+- Built-in assertions to verify exactly 100 unique topics
+
+**Design Philosophy:**
+- Topics are domain-only suggestions (1-2 words max)
+- Gives Claude flexibility to create appropriate table structures
+- Generic enough to work with any skill type and complexity level
+- Maximizes variety without rigid schema requirements
+
+**Verification:**
+- Contains standalone verification code that checks topic count and uniqueness
+- Can be run directly to test the library: `uv run python dataset_topics.py`
+
+---
+
 ### `main.py` (simple entry point)
 **Location:** Root directory
 **Purpose:** Basic hello world entry point (not actively used)
@@ -258,7 +294,11 @@ app.py
 └── claude_client.py (generate_problem)
 
 claude_client.py
-└── models.py (Problem class)
+├── models.py (Problem class)
+└── dataset_topics.py (will be integrated in Step 8.2)
+
+dataset_topics.py
+└── (standalone, no dependencies)
 
 test files
 ├── app.py (execute_pandas, execute_sql, compare_dataframes)
@@ -288,10 +328,18 @@ test files
 - ✅ Step 6.3: Handle edge cases (loading states, API failures, timeouts)
 - ✅ Step 7.1: Add topic selector (sidebar with checkboxes for multiple topic selection)
 
-### Next Steps (from plan.md):
-- Step 7.2: Add difficulty levels
-- Step 7.3: Add progress tracking (optional)
-- Step 7.4: Improve UX & styling (optional)
+### Current Development (from new-steps.md):
+- ✅ Step 8.1: Create Dataset Topic Library (dataset_topics.py with 100 diverse topics)
+
+### Next Steps (from new-steps.md):
+- Step 8.2: Integrate random topic selection into problem generation
+- Step 8.3: Add solution verification to Problem structure
+- Step 8.4: Implement solution verification
+- Step 8.5: Add "Show Reference Solutions" button
+- Step 8.6: Add export/import problem functionality
+- Step 9.1+: Add derived column skill
+- Step 10.1+: Implement medium difficulty
+- Step 11.1+: Implement hard difficulty with advanced topics
 
 ---
 
