@@ -1,8 +1,9 @@
 """Data models for the Pandas & SQL Practice App."""
 
 from dataclasses import dataclass
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 import pandas as pd
+import json
 
 
 @dataclass
@@ -50,6 +51,79 @@ class Problem:
 
         result += "\n)"
         return result
+
+    def to_json(self) -> Dict[str, Any]:
+        """Serialize Problem to JSON-compatible dictionary.
+
+        Returns:
+            Dictionary containing all problem fields with DataFrames converted to JSON format
+        """
+        # Convert input tables DataFrames to JSON-compatible format
+        input_tables_json = {}
+        for table_name, df in self.input_tables.items():
+            input_tables_json[table_name] = {
+                'columns': list(df.columns),
+                'data': df.to_dict(orient='records')
+            }
+
+        # Convert expected output DataFrame to JSON format
+        expected_output_json = {
+            'columns': list(self.expected_output.columns),
+            'data': self.expected_output.to_dict(orient='records')
+        }
+
+        return {
+            'input_tables': input_tables_json,
+            'question': self.question,
+            'expected_output': expected_output_json,
+            'topic': self.topic,
+            'difficulty': self.difficulty,
+            'pandas_solution': self.pandas_solution,
+            'sql_solution': self.sql_solution
+        }
+
+    @classmethod
+    def from_json(cls, json_dict: Dict[str, Any]) -> 'Problem':
+        """Create Problem from JSON dictionary.
+
+        Args:
+            json_dict: Dictionary containing problem data in JSON format
+
+        Returns:
+            Problem object
+
+        Raises:
+            ValueError: If required fields are missing or data is invalid
+        """
+        # Validate required fields
+        required_fields = ['input_tables', 'question', 'expected_output', 'topic']
+        missing_fields = [field for field in required_fields if field not in json_dict]
+        if missing_fields:
+            raise ValueError(f"Missing required fields: {missing_fields}")
+
+        # Convert input tables from JSON to DataFrames
+        input_tables = {}
+        for table_name, table_data in json_dict['input_tables'].items():
+            if 'columns' not in table_data or 'data' not in table_data:
+                raise ValueError(f"Table '{table_name}' missing 'columns' or 'data' field")
+            input_tables[table_name] = pd.DataFrame(table_data['data'], columns=table_data['columns'])
+
+        # Convert expected output from JSON to DataFrame
+        expected_data = json_dict['expected_output']
+        if 'columns' not in expected_data or 'data' not in expected_data:
+            raise ValueError("Expected output missing 'columns' or 'data' field")
+        expected_output = pd.DataFrame(expected_data['data'], columns=expected_data['columns'])
+
+        # Create and return Problem object
+        return cls(
+            input_tables=input_tables,
+            question=json_dict['question'],
+            expected_output=expected_output,
+            topic=json_dict['topic'],
+            difficulty=json_dict.get('difficulty', 'easy'),
+            pandas_solution=json_dict.get('pandas_solution'),
+            sql_solution=json_dict.get('sql_solution')
+        )
 
 
 if __name__ == "__main__":

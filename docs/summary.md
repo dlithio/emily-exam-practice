@@ -47,6 +47,8 @@ This is a Streamlit-based educational application that generates pandas and SQL 
 - Multi-topic checkbox selector (empty = all topics)
 - "Reveal Problem Info" button (hides topic/difficulty until clicked)
 - "Show Reference Solutions" button (displays Claude's verified pandas and SQL solutions in expandable sections)
+- "Export Problem" button (downloads current problem as JSON file with timestamp)
+- "Import Problem" file uploader (loads problem from JSON with validation and error handling)
 - Robust API error handling (keeps previous problem on failure)
 - Session state for persistence across reruns
 - Automatic verification of Claude's reference solutions with logging
@@ -63,6 +65,11 @@ This is a Streamlit-based educational application that generates pandas and SQL 
 **Classes:**
 - `Problem` (dataclass) - Contains input_tables (dict), question (str), expected_output (DataFrame), topic (str), difficulty (str), pandas_solution (Optional[str]), sql_solution (Optional[str])
 - Solutions are Claude's reference implementations that produce the expected output
+
+**Key Methods:**
+- `to_json()` → Dict[str, Any] - Serializes Problem to JSON-compatible dict (converts DataFrames to JSON format)
+- `from_json(json_dict)` → Problem - Creates Problem from JSON dict with validation
+- `__repr__()` → str - Pretty prints problem structure
 
 ---
 
@@ -118,6 +125,7 @@ This is a Streamlit-based educational application that generates pandas and SQL 
 - `test_edge_case.py` - Tests incomplete SQL queries
 - `test_pandas_error.py` - Tests error traceback handling
 - `test_solution_verification.py` - Tests verify_problem_solutions() function with multiple problems (100% success rate)
+- `test_export_import.py` - Tests Problem.to_json() and Problem.from_json() with data integrity checks and error handling
 
 **Key Testing Details:**
 - DataFrame comparison: Lenient with int/float types, strict row/column order, float tolerance (rtol=1e-5, atol=1e-8)
@@ -162,17 +170,24 @@ This is a Streamlit-based educational application that generates pandas and SQL 
 
 ## Development Progress
 
-**Completed:** Steps 1.1 through 8.5 (full basic app + topic library + random topic integration + reference solutions + solution verification + reference solutions UI)
+**Completed:** Steps 1.1 through 8.6 (full basic app + topic library + random topic integration + reference solutions + solution verification + reference solutions UI + export/import functionality)
 
-**What's New in Step 8.5:**
-- Added "Show Reference Solutions" button in the main UI (3-column layout with Run Code, Reveal Problem Info, Show Reference Solutions)
-- Session state management for `solutions_revealed` flag
-- Solutions display in expandable sections with syntax highlighting (🐼 Pandas Solution, 🗄️ SQL Solution)
-- Solutions are automatically hidden when new problem is generated
-- Clear caption indicating these are verified reference solutions
+**What's New in Step 8.6:**
+- Added "Export Problem" button in sidebar "Save & Share" section
+- Export generates JSON file with format: `problem_{topic}_{timestamp}.json`
+- Added "Import Problem" file uploader with comprehensive validation
+- Import includes error handling for invalid JSON, missing fields, and malformed data
+- JSON format preserves all problem data: input_tables, question, expected_output, topic, difficulty, pandas_solution, sql_solution
+- DataFrames serialized as {columns: [...], data: [{...}, ...]} format for readability
+- Import automatically clears previous session state and loads new problem
+- Success messages display imported problem's topic and difficulty
+- File ID tracking prevents re-processing uploads on rerun (fixes Streamlit MediaFileHandler errors)
+- Import tracking resets when generating new problem (allows re-importing same file)
+- Added `Problem.to_json()` and `Problem.from_json()` methods to models.py
+- Added `test_export_import.py` for testing serialization integrity and error handling
+- Added `test_import_logic.py` for testing file ID tracking and import logic
 
 **Next Up (new-steps.md):**
-- Step 8.6: Export/import problem functionality
 - Step 9: Add "derived_column" skill
 - Step 10: Medium difficulty (2-3 skill combinations)
 - Step 11: Hard difficulty (3-4 skills + advanced topics like pivot/melt/cross_join)

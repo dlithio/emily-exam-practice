@@ -5,6 +5,8 @@ import traceback
 import random
 import signal
 import logging
+import json
+from datetime import datetime
 from contextlib import contextmanager
 from typing import Tuple, Optional
 from models import Problem
@@ -340,6 +342,8 @@ if 'problem_info_revealed' not in st.session_state:
     st.session_state.problem_info_revealed = False
 if 'solutions_revealed' not in st.session_state:
     st.session_state.solutions_revealed = False
+if 'last_uploaded_file_id' not in st.session_state:
+    st.session_state.last_uploaded_file_id = None
 
 # Generate problem on first load
 if st.session_state.current_problem is None:
@@ -446,6 +450,7 @@ with st.sidebar:
         st.session_state.user_code = ""
         st.session_state.problem_info_revealed = False  # Hide info for new problem
         st.session_state.solutions_revealed = False  # Hide solutions for new problem
+        st.session_state.last_uploaded_file_id = None  # Reset file uploader
 
         # Determine which topics to choose from
         if st.session_state.selected_topics:
@@ -501,6 +506,88 @@ with st.sidebar:
 
                 # Provide retry guidance
                 st.info("💡 Try again or select different topics. The API may be temporarily busy.")
+
+    st.divider()
+
+    # Export Problem button
+    st.subheader("Save & Share")
+
+    if st.session_state.current_problem:
+        # Create filename with topic and timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        topic_name = st.session_state.current_problem.topic
+        filename = f"problem_{topic_name}_{timestamp}.json"
+
+        # Convert problem to JSON
+        problem_json = st.session_state.current_problem.to_json()
+        json_str = json.dumps(problem_json, indent=2)
+
+        # Download button
+        st.download_button(
+            label="Export Problem",
+            data=json_str,
+            file_name=filename,
+            mime="application/json",
+            use_container_width=True,
+            help="Download the current problem as a JSON file to save or share with others"
+        )
+    else:
+        st.button("Export Problem", disabled=True, use_container_width=True, help="No problem loaded")
+
+    # Import Problem file uploader
+    uploaded_file = st.file_uploader(
+        "Import Problem",
+        type="json",
+        help="Upload a previously exported problem JSON file"
+    )
+
+    if uploaded_file is not None:
+        # Create a unique ID for this uploaded file to track if we've already processed it
+        file_id = f"{uploaded_file.name}_{uploaded_file.size}"
+
+        # Only process if this is a new file (not already processed)
+        if file_id != st.session_state.last_uploaded_file_id:
+            try:
+                # Read and parse JSON
+                json_data = json.loads(uploaded_file.read())
+
+                # Create Problem object from JSON
+                imported_problem = Problem.from_json(json_data)
+
+                # Load as current problem
+                st.session_state.current_problem = imported_problem
+
+                # Clear previous results
+                st.session_state.result_df = None
+                st.session_state.error_message = None
+                st.session_state.is_correct = None
+                st.session_state.feedback_message = None
+                st.session_state.show_expected = False
+                st.session_state.user_code = ""
+                st.session_state.problem_info_revealed = False
+                st.session_state.solutions_revealed = False
+
+                # Mark this file as processed
+                st.session_state.last_uploaded_file_id = file_id
+
+                # Show success message
+                topic_display = imported_problem.topic.replace("_", " ").title()
+                difficulty_display = imported_problem.difficulty.title() if imported_problem.difficulty else "Easy"
+                st.success(f"✓ Problem imported successfully!\n\n**Topic:** {topic_display} | **Difficulty:** {difficulty_display}")
+                st.rerun()
+
+            except json.JSONDecodeError as e:
+                st.error("❌ Invalid JSON file. Please check the file format.")
+                st.warning(f"Error details: {str(e)}")
+                st.session_state.last_uploaded_file_id = None
+            except ValueError as e:
+                st.error("❌ Invalid problem structure.")
+                st.warning(f"Error details: {str(e)}")
+                st.session_state.last_uploaded_file_id = None
+            except Exception as e:
+                st.error("❌ Failed to import problem.")
+                st.warning(f"Error details: {str(e)}")
+                st.session_state.last_uploaded_file_id = None
 
 # Problem Section
 st.header("Problem")
