@@ -4,6 +4,7 @@ import sqlite3
 import traceback
 from typing import Tuple, Optional
 from models import Problem
+from claude_client import generate_problem
 
 
 def execute_pandas(code: str, input_tables: dict[str, pd.DataFrame]) -> Tuple[Optional[pd.DataFrame], Optional[str]]:
@@ -191,29 +192,6 @@ def display_problem(problem: Problem) -> None:
     # Note: We intentionally hide the expected_output - that's the answer!
 
 
-# Create a hardcoded sample problem for testing
-employees = pd.DataFrame({
-    'name': ['Alice', 'Bob', 'Charlie', 'Diana'],
-    'department': ['Engineering', 'Sales', 'Engineering', 'HR'],
-    'salary': [95000, 65000, 88000, 72000],
-    'years': [5, 3, 7, 4]
-})
-
-expected = pd.DataFrame({
-    'name': ['Alice', 'Charlie'],
-    'department': ['Engineering', 'Engineering'],
-    'salary': [95000, 88000],
-    'years': [5, 7]
-})
-
-sample_problem = Problem(
-    input_tables={'employees': employees},
-    question="Filter the employees table to show only employees in the Engineering department.",
-    expected_output=expected,
-    topic="filter_rows",
-    difficulty="easy"
-)
-
 # Initialize session state
 if 'result_df' not in st.session_state:
     st.session_state.result_df = None
@@ -225,6 +203,24 @@ if 'feedback_message' not in st.session_state:
     st.session_state.feedback_message = None
 if 'show_expected' not in st.session_state:
     st.session_state.show_expected = False
+if 'current_problem' not in st.session_state:
+    st.session_state.current_problem = None
+
+# Generate problem on first load
+if st.session_state.current_problem is None:
+    with st.spinner("Generating your first problem..."):
+        try:
+            # Generate a problem with a random foundational topic
+            # Start with filter_rows as it's the first foundational topic
+            st.session_state.current_problem = generate_problem(
+                topic="filter_rows",
+                difficulty="easy",
+                use_cache=True
+            )
+        except Exception as e:
+            st.error(f"Failed to generate problem: {e}")
+            st.error("Please check your ANTHROPIC_API_KEY is set correctly.")
+            st.stop()
 
 # Main App Layout
 st.title("Pandas & SQL Practice")
@@ -241,7 +237,7 @@ st.markdown("""
 
 # Problem Section
 st.header("Problem")
-display_problem(sample_problem)
+display_problem(st.session_state.current_problem)
 
 # Your Code Section
 st.header("Your Code")
@@ -274,26 +270,26 @@ if run_button:
         st.session_state.is_correct = None
         st.session_state.feedback_message = None
     elif language == "Pandas":
-        result_df, error = execute_pandas(user_code, sample_problem.input_tables)
+        result_df, error = execute_pandas(user_code, st.session_state.current_problem.input_tables)
         st.session_state.result_df = result_df
         st.session_state.error_message = error
 
         # If execution was successful, compare with expected output
         if error is None and result_df is not None:
-            is_correct, feedback = compare_dataframes(result_df, sample_problem.expected_output)
+            is_correct, feedback = compare_dataframes(result_df, st.session_state.current_problem.expected_output)
             st.session_state.is_correct = is_correct
             st.session_state.feedback_message = feedback
         else:
             st.session_state.is_correct = None
             st.session_state.feedback_message = None
     else:  # SQL
-        result_df, error = execute_sql(user_code, sample_problem.input_tables)
+        result_df, error = execute_sql(user_code, st.session_state.current_problem.input_tables)
         st.session_state.result_df = result_df
         st.session_state.error_message = error
 
         # If execution was successful, compare with expected output
         if error is None and result_df is not None:
-            is_correct, feedback = compare_dataframes(result_df, sample_problem.expected_output)
+            is_correct, feedback = compare_dataframes(result_df, st.session_state.current_problem.expected_output)
             st.session_state.is_correct = is_correct
             st.session_state.feedback_message = feedback
         else:
@@ -324,7 +320,7 @@ elif st.session_state.result_df is not None:
         with col2:
             st.subheader("Expected Output:")
             if st.session_state.show_expected:
-                st.dataframe(sample_problem.expected_output)
+                st.dataframe(st.session_state.current_problem.expected_output)
             else:
                 if st.button("Show Expected Output"):
                     st.session_state.show_expected = True
