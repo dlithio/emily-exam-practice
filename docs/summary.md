@@ -46,6 +46,7 @@ This is a Streamlit-based educational application that generates pandas and SQL 
 - 5-second execution timeout for user code safety
 - Multi-topic checkbox selector (empty = all topics)
 - "Reveal Problem Info" button (hides topic/difficulty until clicked)
+- "Show Reference Solutions" button (displays Claude's verified pandas and SQL solutions in expandable sections)
 - Robust API error handling (keeps previous problem on failure)
 - Session state for persistence across reruns
 - Automatic verification of Claude's reference solutions with logging
@@ -161,17 +162,17 @@ This is a Streamlit-based educational application that generates pandas and SQL 
 
 ## Development Progress
 
-**Completed:** Steps 1.1 through 8.4 (full basic app + topic library + random topic integration + reference solutions + solution verification)
+**Completed:** Steps 1.1 through 8.5 (full basic app + topic library + random topic integration + reference solutions + solution verification + reference solutions UI)
 
-**What's New in Step 8.4:**
-- Added `verify_problem_solutions(problem)` function in app.py
-- Verification runs automatically after each problem generation
-- Checks both pandas and SQL solutions against expected output
-- Logs warnings when solutions fail verification (MVP: accepts problem anyway)
-- Test suite confirms 100% verification success rate across multiple topics
+**What's New in Step 8.5:**
+- Added "Show Reference Solutions" button in the main UI (3-column layout with Run Code, Reveal Problem Info, Show Reference Solutions)
+- Session state management for `solutions_revealed` flag
+- Solutions display in expandable sections with syntax highlighting (🐼 Pandas Solution, 🗄️ SQL Solution)
+- Solutions are automatically hidden when new problem is generated
+- Clear caption indicating these are verified reference solutions
 
 **Next Up (new-steps.md):**
-- Step 8.5-8.6: UI for showing reference solutions, export/import problem functionality
+- Step 8.6: Export/import problem functionality
 - Step 9: Add "derived_column" skill
 - Step 10: Medium difficulty (2-3 skill combinations)
 - Step 11: Hard difficulty (3-4 skills + advanced topics like pivot/melt/cross_join)

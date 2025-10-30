@@ -338,6 +338,8 @@ if 'selected_topics' not in st.session_state:
     st.session_state.selected_topics = []  # Empty list means "all topics"
 if 'problem_info_revealed' not in st.session_state:
     st.session_state.problem_info_revealed = False
+if 'solutions_revealed' not in st.session_state:
+    st.session_state.solutions_revealed = False
 
 # Generate problem on first load
 if st.session_state.current_problem is None:
@@ -443,6 +445,7 @@ with st.sidebar:
         st.session_state.show_expected = False
         st.session_state.user_code = ""
         st.session_state.problem_info_revealed = False  # Hide info for new problem
+        st.session_state.solutions_revealed = False  # Hide solutions for new problem
 
         # Determine which topics to choose from
         if st.session_state.selected_topics:
@@ -528,19 +531,37 @@ user_code = st.text_area(
 # Update session state with current code
 st.session_state.user_code = user_code
 
-# Buttons: Run Code and Reveal Problem Info
-col1, col2 = st.columns([1, 1])
+# Buttons: Run Code, Reveal Problem Info, and Show Reference Solutions
+col1, col2, col3 = st.columns([1, 1, 1])
 with col1:
     run_button = st.button("Run Code", type="primary", use_container_width=True)
 with col2:
     if st.button("Reveal Problem Info", use_container_width=True):
         st.session_state.problem_info_revealed = True
+with col3:
+    if st.button("Show Reference Solutions", use_container_width=True):
+        st.session_state.solutions_revealed = True
 
 # Show problem info if revealed
 if st.session_state.problem_info_revealed and st.session_state.current_problem:
     topic_display = st.session_state.current_problem.topic.replace("_", " ").title()
     difficulty_display = st.session_state.current_problem.difficulty.title() if st.session_state.current_problem.difficulty else "Easy"
     st.info(f"📚 **Topic:** {topic_display} | **Difficulty:** {difficulty_display}")
+
+# Show reference solutions if revealed
+if st.session_state.solutions_revealed and st.session_state.current_problem:
+    st.subheader("Reference Solutions")
+    st.caption("These are Claude's reference solutions that were verified to produce the expected output")
+
+    # Display pandas solution
+    if st.session_state.current_problem.pandas_solution:
+        with st.expander("🐼 Pandas Solution", expanded=True):
+            st.code(st.session_state.current_problem.pandas_solution, language="python")
+
+    # Display SQL solution
+    if st.session_state.current_problem.sql_solution:
+        with st.expander("🗄️ SQL Solution", expanded=True):
+            st.code(st.session_state.current_problem.sql_solution, language="sql")
 
 # Handle code execution when button is clicked
 if run_button:
