@@ -1,5 +1,7 @@
 import streamlit as st
 import pandas as pd
+import sqlite3
+import traceback
 from typing import Tuple, Optional
 from models import Problem
 
@@ -42,14 +44,40 @@ def execute_pandas(code: str, input_tables: dict[str, pd.DataFrame]) -> Tuple[Op
 
         return result, None
 
-    except SyntaxError as e:
-        return None, f"Syntax Error: {str(e)}"
-    except NameError as e:
-        return None, f"Name Error: {str(e)}\nMake sure you're using the correct table names and pandas syntax."
-    except KeyError as e:
-        return None, f"Key Error: {str(e)}\nCheck that column names are correct."
-    except Exception as e:
-        return None, f"Error: {type(e).__name__}: {str(e)}"
+    except Exception:
+        return None, traceback.format_exc()
+
+
+def execute_sql(query: str, input_tables: dict[str, pd.DataFrame]) -> Tuple[Optional[pd.DataFrame], Optional[str]]:
+    """Execute user's SQL query safely and return the result.
+
+    Args:
+        query: User's SQL query as a string
+        input_tables: Dictionary of table names to DataFrames
+
+    Returns:
+        Tuple of (result_dataframe, error_message)
+        - If successful: (DataFrame, None)
+        - If error: (None, error_message_string)
+    """
+    try:
+        # Create an in-memory SQLite database
+        conn = sqlite3.connect(':memory:')
+
+        # Load all input tables into the database
+        for table_name, df in input_tables.items():
+            df.to_sql(table_name, conn, index=False, if_exists='replace')
+
+        # Execute the user's SQL query and fetch results as a DataFrame
+        result = pd.read_sql_query(query, conn)
+
+        # Close the connection
+        conn.close()
+
+        return result, None
+
+    except Exception:
+        return None, traceback.format_exc()
 
 
 def display_problem(problem: Problem) -> None:
@@ -146,7 +174,14 @@ if run_button:
             st.success("Code executed successfully!")
             st.subheader("Your Output:")
             st.dataframe(result_df)
-    else:
-        st.info("SQL execution will be implemented in step 3.3...")
+    else:  # SQL
+        result_df, error = execute_sql(user_code, sample_problem.input_tables)
+
+        if error:
+            st.error(error)
+        else:
+            st.success("Code executed successfully!")
+            st.subheader("Your Output:")
+            st.dataframe(result_df)
 else:
     st.write("Your results will appear here after running your code.")
