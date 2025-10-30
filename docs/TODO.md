@@ -1,7 +1,4 @@
-* Lags and fills as a derived column
-* Date conversion from string for hard problem
-* showing column types?
-* `Correct! Your output matches the expected result.`- some indication of code that was ran
-* A "check all" button.
-* column type conversion in simple?
+* The existing skills should be put under an "easy" heading. Add some skills under a "medium/hard" heading that can only be selected when medium/hard is selected. The medium/hard skills should include: fillna/replacing nulls, lagging a column (column transform subtype), na/null forward or backward fill, simple column type conversions. Create an easy way for to select all easy types and/or select all medium/hard types. Before writing out the plan, let me know if there are other problem types that you think I should consider.
+* Add a button for showing the dtypes of the input dataframes.
+* `Correct! Your output matches the expected result.`- some indication of code that was ran (I think say pandas vs. sql and the timestamp it was ran, but I'm open to other options too)
 * Run pandas code through black and sql code through sql format

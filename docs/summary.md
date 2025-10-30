@@ -188,7 +188,7 @@ Streamlit educational app that generates pandas/SQL practice problems on-the-fly
 
 ## Development Progress
 
-**Completed Steps:** 1.1 through 11.3
+**Completed Steps:** 1.1 through 11.4
 
 **Current State:**
 - ✅ Full basic app with execution and comparison
@@ -203,9 +203,10 @@ Streamlit educational app that generates pandas/SQL practice problems on-the-fly
 - ✅ Advanced topics for hard problems: datatypes, cross_join, pivot, melt
 - ✅ Hard problems always use CTEs with smart distribution (more skills = more CTEs)
 - ✅ Pandas-only problems (pivot/melt) supported: SQL option disabled, sql_solution skipped
+- ✅ Hard difficulty tested: 83% success rate, verified problem distribution and CTE usage
 
 **Next Up (new-steps.md):**
-- Step 11.4: Test hard difficulty problems
+- Phase 12: Polish & Integration
 
 ---
 
