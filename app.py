@@ -25,7 +25,8 @@ TOPICS = [
     "distinct",
     "joins",
     "order_by",
-    "limit"
+    "limit",
+    "derived_column"
 ]
 
 # Execution timeout in seconds

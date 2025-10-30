@@ -139,6 +139,7 @@ def build_problem_generation_prompt(topic: str, difficulty: str = "easy", datase
         "joins": "combining information from two related tables",
         "order_by": "arranging data in a specific order (ascending or descending)",
         "limit": "showing only the first few rows of results",
+        "derived_column": "creating a new column based on existing column values",
     }
 
     topic_desc = topic_descriptions.get(topic, topic)
@@ -166,8 +167,36 @@ column names, and data that fit naturally with this domain. For example:
 Use your creativity to design tables that make sense for this domain and the skill being tested.
 """
 
+    # Add special instructions for derived_column topic
+    derived_column_instruction = ""
+    if topic == "derived_column":
+        # Select subtypes based on difficulty
+        # Easy problems: only Arithmetic or Conditional (no dates - they require pd.to_datetime conversion)
+        # Medium/Hard problems: can include Date subtype
+        if difficulty == "easy":
+            subtypes = [
+                ("Arithmetic", "Create a new column calculated from one or more existing numeric columns using basic math operations (+, -, *, /). Examples: total = price * quantity, discount_amount = price * 0.1, total_score = math_score + english_score"),
+                ("Conditional", "Create a new boolean or categorical column based on a condition. Examples: is_premium = (tier == 'Gold' or tier == 'Platinum'), status = 'pass' if score >= 60 else 'fail', category = 'high' if value > 100 else 'low'")
+            ]
+        else:
+            # Medium/Hard: include Date subtype as well
+            subtypes = [
+                ("Arithmetic", "Create a new column calculated from one or more existing numeric columns using basic math operations (+, -, *, /). Examples: total = price * quantity, discount_amount = price * 0.1, total_score = math_score + english_score"),
+                ("Conditional", "Create a new boolean or categorical column based on a condition. Examples: is_premium = (tier == 'Gold' or tier == 'Platinum'), status = 'pass' if score >= 60 else 'fail', category = 'high' if value > 100 else 'low'"),
+                ("Date", "Create a new column that extracts a component from a date/timestamp column (year, month, day, day of week). Examples: year = date.dt.year (pandas) or strftime('%Y', date) (SQL), month_name = date.dt.month_name()")
+            ]
+        subtype_name, subtype_desc = random.choice(subtypes)
+        derived_column_instruction = f"""
+DERIVED COLUMN SUBTYPE: {subtype_name}
+{subtype_desc}
+
+Your problem should ask the user to create this new derived column and show it in the output.
+The expected output should include the new column.
+Make sure the problem is solvable in both pandas and SQL.
+"""
+
     prompt = f"""Generate a pandas/SQL practice problem focused on {topic_desc}.
-{dataset_instruction}
+{dataset_instruction}{derived_column_instruction}
 REQUIREMENTS:
 1. Create 1-2 small DataFrames as input tables with realistic column names and data
 2. Write a clear word problem describing what the user should do

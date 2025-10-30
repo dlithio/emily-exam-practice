@@ -53,7 +53,7 @@ This is a Streamlit-based educational application that generates pandas and SQL 
 - Session state for persistence across reruns
 - Automatic verification of Claude's reference solutions with logging
 
-**Available Topics:** filter_columns, filter_rows, aggregations, distinct, joins, order_by, limit
+**Available Topics:** filter_columns, filter_rows, aggregations, distinct, joins, order_by, limit, derived_column
 
 **Dependencies:** `models.py` (Problem), `claude_client.py` (generate_problem)
 
@@ -91,6 +91,9 @@ This is a Streamlit-based educational application that generates pandas and SQL 
 - Must be solvable in both pandas AND SQL
 - Random dataset topic selection for variety (integrated in Step 8.2)
 - Reference solutions: pandas assigns to 'result', SQL is complete SELECT query
+- Derived column subtypes:
+  - Easy difficulty: Arithmetic (math operations), Conditional (boolean/category)
+  - Medium/Hard: Also includes Date (extract date components)
 
 **Dependencies:** `models.py` (Problem), `dataset_topics.py` (get_random_topic)
 
@@ -170,7 +173,7 @@ This is a Streamlit-based educational application that generates pandas and SQL 
 
 ## Development Progress
 
-**Completed:** Steps 1.1 through 8.6 (full basic app + topic library + random topic integration + reference solutions + solution verification + reference solutions UI + export/import functionality)
+**Completed:** Steps 1.1 through 9.1 (full basic app + topic library + random topic integration + reference solutions + solution verification + reference solutions UI + export/import functionality + derived_column topic)
 
 **What's New in Step 8.6:**
 - Added "Export Problem" button in sidebar "Save & Share" section
@@ -187,8 +190,21 @@ This is a Streamlit-based educational application that generates pandas and SQL 
 - Added `test_export_import.py` for testing serialization integrity and error handling
 - Added `test_import_logic.py` for testing file ID tracking and import logic
 
+**What's New in Step 9.1:**
+- Added "derived_column" as new easy skill (8th foundational topic)
+- Added derived_column to TOPICS list in app.py
+- Added topic description in claude_client.py topic_descriptions mapping
+- Implemented derived_column subtypes with difficulty-based selection:
+  - Arithmetic: Math operations on existing columns (e.g., total = price * quantity)
+  - Conditional: Boolean/categorical columns (e.g., is_passing = score >= 60)
+  - Date: Extract date components (e.g., year from timestamp) - Medium/Hard only
+- Easy difficulty only uses Arithmetic and Conditional (Date requires pd.to_datetime conversion)
+- Prompt builder now includes derived_column-specific instructions
+- Topic appears in sidebar checkbox list for user selection
+
 **Next Up (new-steps.md):**
-- Step 9: Add "derived_column" skill
+- Step 9.2: Update prompt for derived column problems with detailed examples
+- Step 9.3: Test derived column problems end-to-end
 - Step 10: Medium difficulty (2-3 skill combinations)
 - Step 11: Hard difficulty (3-4 skills + advanced topics like pivot/melt/cross_join)
 
