@@ -80,6 +80,97 @@ def execute_sql(query: str, input_tables: dict[str, pd.DataFrame]) -> Tuple[Opti
         return None, traceback.format_exc()
 
 
+def compare_dataframes(user_df: any, expected_df: pd.DataFrame) -> Tuple[bool, str]:
+    """Compare user's output DataFrame with expected output.
+
+    By default, both row order and column order must match exactly.
+
+    Args:
+        user_df: User's output (could be any type)
+        expected_df: Expected output DataFrame
+
+    Returns:
+        Tuple of (is_correct, feedback_message)
+        - is_correct: True if outputs match, False otherwise
+        - feedback_message: Detailed feedback about the comparison
+    """
+    # Check if user_df is a DataFrame
+    if not isinstance(user_df, pd.DataFrame):
+        return False, f"Expected a DataFrame, but got {type(user_df).__name__}"
+
+    # Check if shapes match
+    if user_df.shape != expected_df.shape:
+        return False, (
+            f"Shape mismatch: Your output has shape {user_df.shape} "
+            f"(rows={user_df.shape[0]}, columns={user_df.shape[1]}), "
+            f"but expected shape {expected_df.shape} "
+            f"(rows={expected_df.shape[0]}, columns={expected_df.shape[1]})"
+        )
+
+    # Check if column names match (exact order)
+    if list(user_df.columns) != list(expected_df.columns):
+        user_cols_set = set(user_df.columns)
+        expected_cols_set = set(expected_df.columns)
+
+        # Check if columns are just in wrong order or actually different
+        if user_cols_set == expected_cols_set:
+            return False, (
+                f"Column order mismatch: Your columns are {list(user_df.columns)}, "
+                f"but expected {list(expected_df.columns)}"
+            )
+        else:
+            # Columns are actually different
+            missing_cols = expected_cols_set - user_cols_set
+            extra_cols = user_cols_set - expected_cols_set
+
+            msg_parts = ["Column mismatch:"]
+            if missing_cols:
+                msg_parts.append(f"Missing columns: {sorted(missing_cols)}")
+            if extra_cols:
+                msg_parts.append(f"Extra columns: {sorted(extra_cols)}")
+
+            return False, " ".join(msg_parts)
+
+    # Reset index to ensure clean comparison (but don't sort)
+    user_clean = user_df.reset_index(drop=True)
+    expected_clean = expected_df.reset_index(drop=True)
+
+    # Use pandas testing utility for comparison
+    try:
+        pd.testing.assert_frame_equal(
+            user_clean,
+            expected_clean,
+            check_dtype=False,  # Be lenient with data types (int vs float is OK)
+            check_exact=False,  # Use approximate comparison for floats
+            rtol=1e-5,  # Relative tolerance for float comparison
+            atol=1e-8   # Absolute tolerance for float comparison
+        )
+        return True, "Correct! Your output matches the expected result."
+    except AssertionError as e:
+        # Parse the assertion error to provide helpful feedback
+        error_msg = str(e)
+
+        # Try to provide more specific feedback
+        if "dtype" in error_msg.lower():
+            return False, f"Data type mismatch: {error_msg}"
+        elif "values" in error_msg.lower() or "different" in error_msg.lower():
+            # Find which values differ
+            differences = []
+            for col in user_clean.columns:
+                if not user_clean[col].equals(expected_clean[col]):
+                    differences.append(col)
+
+            if differences:
+                return False, (
+                    f"Values don't match in column(s): {differences}. "
+                    f"Check your filtering/calculation logic."
+                )
+            else:
+                return False, f"Values don't match: {error_msg}"
+        else:
+            return False, f"Output doesn't match expected result: {error_msg}"
+
+
 def display_problem(problem: Problem) -> None:
     """Display a problem with its input tables and question.
 
