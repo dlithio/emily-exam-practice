@@ -129,6 +129,7 @@ This is a Streamlit-based educational application that generates pandas and SQL 
 - `test_pandas_error.py` - Tests error traceback handling
 - `test_solution_verification.py` - Tests verify_problem_solutions() function with multiple problems (100% success rate)
 - `test_export_import.py` - Tests Problem.to_json() and Problem.from_json() with data integrity checks and error handling
+- `test_derived_column.py` - Comprehensive tests for all derived_column subtypes (Arithmetic, Conditional, Date) in both pandas and SQL
 
 **Key Testing Details:**
 - DataFrame comparison: Lenient with int/float types, strict row/column order, float tolerance (rtol=1e-5, atol=1e-8)
@@ -173,7 +174,7 @@ This is a Streamlit-based educational application that generates pandas and SQL 
 
 ## Development Progress
 
-**Completed:** Steps 1.1 through 9.1 (full basic app + topic library + random topic integration + reference solutions + solution verification + reference solutions UI + export/import functionality + derived_column topic)
+**Completed:** Steps 1.1 through 9.3 (full basic app + topic library + random topic integration + reference solutions + solution verification + reference solutions UI + export/import functionality + derived_column topic with all subtypes fully tested)
 
 **What's New in Step 8.6:**
 - Added "Export Problem" button in sidebar "Save & Share" section
@@ -202,9 +203,20 @@ This is a Streamlit-based educational application that generates pandas and SQL 
 - Prompt builder now includes derived_column-specific instructions
 - Topic appears in sidebar checkbox list for user selection
 
+**What's New in Steps 9.2 & 9.3:**
+- Step 9.2 (Prompt Enhancement): Enhanced build_problem_generation_prompt() in claude_client.py:171-196
+  - Random subtype selection based on difficulty (Easy: Arithmetic/Conditional only; Medium/Hard: includes Date)
+  - Detailed examples for each subtype (arithmetic formulas, conditional logic, date extraction)
+  - Clear instructions for Claude to create problems requiring derived columns in output
+- Step 9.3 (Comprehensive Testing): Created test_derived_column.py with 6 test cases:
+  - Arithmetic derivation (single and multi-column: price*quantity, math+english)
+  - Conditional derivation (boolean: score>=60, categorical: tier in ['Gold','Platinum'])
+  - Date derivation (year and month extraction from date strings)
+  - All tests verify both pandas and SQL implementations work correctly
+- Generated and verified 5+ actual problems using Claude API - 100% success rate
+- All three subtypes generate valid problems solvable in both pandas and SQL
+
 **Next Up (new-steps.md):**
-- Step 9.2: Update prompt for derived column problems with detailed examples
-- Step 9.3: Test derived column problems end-to-end
 - Step 10: Medium difficulty (2-3 skill combinations)
 - Step 11: Hard difficulty (3-4 skills + advanced topics like pivot/melt/cross_join)
 

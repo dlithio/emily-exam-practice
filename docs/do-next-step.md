@@ -1,1 +1,1 @@
-Read @docs/summary.md and @docs/new-steps.md . Do step 9.1 and update @docs/summary.md as required while following the instructions at the top of that file.
+Read @docs/summary.md and @docs/new-steps.md . Do step 9.2 and update @docs/summary.md as required while following the instructions at the top of that file.
