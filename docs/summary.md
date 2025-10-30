@@ -19,16 +19,18 @@ This is a Streamlit-based educational application that generates pandas and SQL 
 
 **Key Features:**
 - Session state management for problems, user code, results, and feedback
-- Topic selection (filter_columns, filter_rows, aggregations, distinct, joins, order_by, limit) with "Random" option
+- **Topic selector with checkboxes** - Users can select multiple topics to practice or leave all unchecked for random
+- Available topics: filter_columns, filter_rows, aggregations, distinct, joins, order_by, limit
+- **"Reveal Problem Info" button** - Topic and difficulty are always hidden until user clicks this button (next to "Run Code")
+  - Loading messages also never reveal the topic to avoid giving hints
 - Language selection (Pandas or SQL)
 - Side-by-side comparison of user output vs expected output
-- "Generate New Problem" button with topic selection
+- "Generate New Problem" button that respects selected topics
 - Custom CSS for monospaced code input
 - Comprehensive error handling with detailed feedback messages
 - Execution timeout protection (5 second limit for user code)
 - Robust API failure handling (keeps previous problem on error)
 - Loading spinners and informative error messages
-- Topic hidden to avoid giving away answers
 
 **Session State Variables:**
 - `current_problem` - Currently displayed problem
@@ -38,7 +40,9 @@ This is a Streamlit-based educational application that generates pandas and SQL 
 - `feedback_message` - Comparison feedback
 - `show_expected` - Boolean for showing expected output
 - `user_code` - User's code input
-- `selected_topic` - Currently selected topic filter
+- `selected_topics` - List of selected topics (empty list means all topics)
+- `topic_{topic_name}` - Individual checkbox states for each topic
+- `problem_info_revealed` - Boolean tracking whether user clicked "Reveal Problem Info" button
 
 **References:** `models.py` (Problem), `claude_client.py` (generate_problem)
 
@@ -282,9 +286,9 @@ test files
 - ✅ Step 6.1: Connect generator to app
 - ✅ Step 6.2: Add "New Problem" button
 - ✅ Step 6.3: Handle edge cases (loading states, API failures, timeouts)
+- ✅ Step 7.1: Add topic selector (sidebar with checkboxes for multiple topic selection)
 
 ### Next Steps (from plan.md):
-- Step 7.1: Add topic selector (sidebar with checkboxes)
 - Step 7.2: Add difficulty levels
 - Step 7.3: Add progress tracking (optional)
 - Step 7.4: Improve UX & styling (optional)
@@ -300,7 +304,8 @@ test files
 - **Timeout Protection**: 5 second execution limit using signal-based timeout (Unix/macOS)
   - Prevents infinite loops and slow operations
   - Graceful timeout error messages with helpful guidance
-  - Cross-platform timeout context manager with fallback for Windows
+  - Cross-platform timeout context manager with fallback for Windows and Streamlit threading
+  - Catches both AttributeError (Windows) and ValueError (Streamlit threading) gracefully
 
 ### Error Handling & Robustness
 - **Code Execution Errors**:
@@ -331,10 +336,18 @@ test files
 
 ### Streamlit Features
 - Session state for persistence across reruns
+- **Multi-topic selector**: Checkboxes allow users to select one or more topics to practice
+  - Empty selection = all topics (random mode)
+  - Specific selections = only generate problems from selected topics
+- **Manual problem info reveal**: "Reveal Problem Info" button always keeps topic/difficulty hidden until clicked
+  - Resets to hidden state on every new problem
+  - Encourages users to attempt problems without hints
 - Custom CSS for monospaced code input
 - Spinners for API calls
 - Side-by-side column layout for output comparison
 - Success/error message styling
+- Sidebar organization with topic selector and problem generator controls
+- Two-column button layout for "Run Code" and "Reveal Problem Info"
 
 ---
 

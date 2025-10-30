@@ -52,9 +52,10 @@ def time_limit(seconds):
             yield
         finally:
             signal.alarm(0)  # Disable alarm
-    except AttributeError:
-        # On Windows, signal.SIGALRM doesn't exist - just yield without timeout
-        # In production, would use multiprocessing or other cross-platform solution
+    except (AttributeError, ValueError):
+        # AttributeError: On Windows, signal.SIGALRM doesn't exist
+        # ValueError: signal only works in main thread (Streamlit threading)
+        # In both cases, just yield without timeout protection
         yield
 
 
@@ -269,8 +270,10 @@ if 'current_problem' not in st.session_state:
     st.session_state.current_problem = None
 if 'user_code' not in st.session_state:
     st.session_state.user_code = ""
-if 'selected_topic' not in st.session_state:
-    st.session_state.selected_topic = "Random"
+if 'selected_topics' not in st.session_state:
+    st.session_state.selected_topics = []  # Empty list means "all topics"
+if 'problem_info_revealed' not in st.session_state:
+    st.session_state.problem_info_revealed = False
 
 # Generate problem on first load
 if st.session_state.current_problem is None:
@@ -325,13 +328,28 @@ st.markdown("""
 with st.sidebar:
     st.header("Problem Generator")
 
-    # Topic selector - using key to bind directly to session state
-    topic_options = ["Random"] + TOPICS
-    st.selectbox(
-        "Select Topic:",
-        options=topic_options,
-        key="selected_topic"  # This automatically binds to st.session_state.selected_topic
-    )
+    # Topic selector with checkboxes
+    st.subheader("Select Topics to Practice:")
+    st.caption("Select topics to focus on (or leave all unchecked for random)")
+
+    # Create a list to track which topics are selected
+    selected_topics = []
+
+    # Create a checkbox for each topic
+    for topic in TOPICS:
+        # Format topic name for display (convert underscores to spaces and title case)
+        display_name = topic.replace("_", " ").title()
+
+        # Use session state to persist checkbox state
+        checkbox_key = f"topic_{topic}"
+        if checkbox_key not in st.session_state:
+            st.session_state[checkbox_key] = False
+
+        if st.checkbox(display_name, key=checkbox_key):
+            selected_topics.append(topic)
+
+    # Update selected topics in session state
+    st.session_state.selected_topics = selected_topics
 
     # New problem button
     if st.button("Generate New Problem", type="primary", use_container_width=True):
@@ -342,22 +360,23 @@ with st.sidebar:
         st.session_state.feedback_message = None
         st.session_state.show_expected = False
         st.session_state.user_code = ""
+        st.session_state.problem_info_revealed = False  # Hide info for new problem
 
-        # Determine which topic to use
-        if st.session_state.selected_topic == "Random":
-            topic = random.choice(TOPICS)
+        # Determine which topics to choose from
+        if st.session_state.selected_topics:
+            # Use only selected topics
+            available_topics = st.session_state.selected_topics
         else:
-            topic = st.session_state.selected_topic
+            # No topics selected, use all topics
+            available_topics = TOPICS
+
+        # Choose a random topic from available topics
+        topic = random.choice(available_topics)
 
         # Generate new problem
-        # IMPORTANT: Don't reveal the topic in messages when "Random" is selected
-        # This prevents giving away hints about what skill is being tested
-        if st.session_state.selected_topic == "Random":
-            spinner_message = "Generating new problem..."
-            success_message = "✓ New problem generated!"
-        else:
-            spinner_message = f"Generating new {topic} problem..."
-            success_message = f"✓ New {topic} problem generated!"
+        # Never reveal the topic in messages - user must click "Reveal Problem Info"
+        spinner_message = "Generating new problem..."
+        success_message = "✓ New problem generated!"
 
         with st.spinner(spinner_message):
             try:
@@ -376,7 +395,7 @@ with st.sidebar:
                 st.warning(f"Error details: {str(e)}")
 
                 # Provide retry guidance
-                st.info("💡 Try again or select a different topic. The API may be temporarily busy.")
+                st.info("💡 Try again or select different topics. The API may be temporarily busy.")
 
 # Problem Section
 st.header("Problem")
@@ -407,8 +426,19 @@ user_code = st.text_area(
 # Update session state with current code
 st.session_state.user_code = user_code
 
-# Run button
-run_button = st.button("Run Code", type="primary")
+# Buttons: Run Code and Reveal Problem Info
+col1, col2 = st.columns([1, 1])
+with col1:
+    run_button = st.button("Run Code", type="primary", use_container_width=True)
+with col2:
+    if st.button("Reveal Problem Info", use_container_width=True):
+        st.session_state.problem_info_revealed = True
+
+# Show problem info if revealed
+if st.session_state.problem_info_revealed and st.session_state.current_problem:
+    topic_display = st.session_state.current_problem.topic.replace("_", " ").title()
+    difficulty_display = st.session_state.current_problem.difficulty.title() if st.session_state.current_problem.difficulty else "Easy"
+    st.info(f"📚 **Topic:** {topic_display} | **Difficulty:** {difficulty_display}")
 
 # Handle code execution when button is clicked
 if run_button:
