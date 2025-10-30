@@ -15,26 +15,31 @@ This document outlines the next phase of development, focusing on:
 ### Step 8.1: Create Dataset Topic Library
 **Task:** Generate 100 diverse dataset topics for more varied problems
 **Actions:**
-- Create `dataset_topics.py` with a list of 100 dataset topics/contexts
+- Create `dataset_topics.py` with a list of 100 domain-only topics
+- Topics should be single-word or simple domain names (e.g., "library", "restaurant", "hospital", "e-commerce", "streaming")
+- This allows Claude flexibility to generate either single or multiple tables based on the problem requirements
 - Topics should cover diverse domains:
-  - Business: sales, customers, products, orders, employees, departments
-  - Education: students, courses, grades, teachers, schools
-  - Technology: users, sessions, clicks, subscriptions, devices
-  - Healthcare: patients, appointments, treatments, medications
-  - Entertainment: movies, ratings, actors, streaming
-  - Finance: transactions, accounts, investments, budgets
-  - Sports: players, teams, games, scores, statistics
-  - E-commerce: products, reviews, purchases, shipping
-  - Social media: posts, comments, likes, followers
-  - Transportation: flights, bookings, routes, vehicles
-- Each topic should be a simple string (e.g., "library books and borrowers", "restaurant orders and menu items")
-- Include variety: some single-table contexts, some multi-table contexts
-- Keep topics generic enough for any skill type
+  - Business: sales, customers, products, orders, employees, departments, retail, wholesale, consulting
+  - Education: school, university, courses, tutoring, training, academy
+  - Technology: social-media, gaming, software, cloud, cybersecurity, analytics
+  - Healthcare: hospital, clinic, pharmacy, lab, telemedicine
+  - Entertainment: movies, music, streaming, theater, concerts, festivals
+  - Finance: banking, investments, insurance, budgeting, trading, loans
+  - Sports: basketball, soccer, tennis, olympics, fitness, marathon
+  - E-commerce: marketplace, shopping, auctions, subscriptions
+  - Transportation: flights, trains, rideshare, logistics, delivery
+  - Food & Beverage: restaurant, cafe, catering, food-truck, bakery
+  - Real Estate: properties, rentals, mortgages, listings
+  - Travel: hotels, tours, bookings, cruises, travel-agency
+  - Manufacturing: factory, supply-chain, inventory, production
+  - Media: news, publishing, podcasts, journalism, advertising
+- Keep topics generic enough for any skill type and complexity level
 
 **Verification:**
 - List should have exactly 100 topics
 - Topics should be diverse across domains
-- Each topic should be clear and suggest obvious data relationships
+- Each topic should be a simple domain name (1-2 words max)
+- Claude will have flexibility to create appropriate table structures based on problem needs
 
 ---
 
@@ -141,6 +146,37 @@ This document outlines the next phase of development, focusing on:
 - Click "Show Reference Solutions" → should see both pandas and SQL solutions
 - Solutions should be clearly formatted and readable
 - Generate new problem → button state should reset
+
+---
+
+### Step 8.6: Add Export/Import Problem Functionality
+**Task:** Allow users to save and share problems as JSON files
+**Actions:**
+- Add "Export Problem" button next to "Generate New Problem" in sidebar
+- When clicked:
+  - Serialize current problem to JSON format
+  - Include all fields: input_tables (convert DataFrames to JSON), question, expected_output, topic, difficulty, pandas_solution, sql_solution
+  - Use Streamlit's download_button to offer JSON file download
+  - Filename format: `problem_{topic}_{timestamp}.json`
+- Add "Import Problem" file uploader in sidebar
+- When file is uploaded:
+  - Parse JSON file
+  - Validate structure (check for required fields)
+  - Convert JSON table data back to DataFrames
+  - Create Problem object and load it as current_problem
+  - Show success message with problem topic and difficulty
+  - Handle errors gracefully (invalid JSON, missing fields, etc.)
+- Add helper functions to `models.py`:
+  - `Problem.to_json()` - Serialize Problem to JSON-compatible dict
+  - `Problem.from_json(json_dict)` - Create Problem from JSON dict
+  - Handle DataFrame serialization using `.to_dict(orient='records')` or similar
+
+**Verification:**
+- Export a problem → should download JSON file
+- Import the same problem → should load correctly and be solvable
+- Import/export should preserve all problem data (tables, solutions, metadata)
+- Invalid JSON files should show helpful error messages
+- Use case: User can save interesting problems to share with friends or revisit later
 
 ---
 
@@ -313,15 +349,16 @@ This document outlines the next phase of development, focusing on:
 - Update problem display to show:
   - Difficulty level (only if "Reveal Problem Info" clicked)
   - Skills being tested (only if "Reveal Problem Info" clicked)
-- Update loading message:
-  - Easy: "Generating new {topic} problem..."
-  - Medium: "Generating new medium problem combining {skill1}, {skill2}..."
-  - Hard: "Generating new hard problem combining {skill1}, {skill2}, {skill3}..."
+- Loading message should be generic and not reveal difficulty or topics:
+  - Use simple message: "Generating practice problem..." with spinner
+  - Do NOT reveal difficulty level, topics, or skills in loading message
+  - All problem details remain hidden until "Reveal Problem Info" is clicked
 
 **Verification:**
 - Select "Medium" difficulty → generate problem → should be noticeably more complex
 - Select "Hard" difficulty → generate problem → should be significantly more complex
 - Difficulty and skills should display when revealed
+- Loading messages should not reveal any problem information
 
 ---
 
@@ -354,45 +391,56 @@ This document outlines the next phase of development, focusing on:
 **Actions:**
 - Define `ADVANCED_TOPICS` in `difficulty_manager.py`:
   - `"datatypes"` - Converting and casting datatypes
-  - `"cross_join"` - Cross join operations
+  - `"cross_join"` - Cross join operations (can be combined with other skills)
   - `"pivot"` - Wide to long format (pandas only)
   - `"melt"` - Long to wide format (pandas only)
   - (Skip "create_dataframe" for now as noted in TODO)
 - Update `select_skills_for_difficulty()`:
   - For hard problems:
-    - 30% chance: Use 1 advanced topic alone (no skill mixing)
-    - 70% chance: Use 3-4 easy skills combined
-  - When using advanced topic alone:
-    - If `pivot` or `melt`: May not have SQL equivalent, make pandas-only
-    - If `datatypes` or `cross_join`: Ensure SQL solution exists
+    - 20% chance: Use `pivot` or `melt` as standalone (pandas-only problems)
+    - 20% chance: Use `datatypes` as standalone advanced topic
+    - 30% chance: Include `cross_join` as one of 2-3 skills (combinable with easy skills)
+    - 30% chance: Use 3-4 easy skills combined (no advanced topics)
+  - Special handling:
+    - `pivot` and `melt`: Always standalone, pandas-only
+    - `datatypes`: Can be standalone or combined (both work well)
+    - `cross_join`: Should typically be combined with other operations (filter, aggregate, etc.) for realistic problems
 - Create topic descriptions for advanced topics:
   ```python
   ADVANCED_TOPIC_DESCRIPTIONS = {
       "datatypes": {
           "name": "Datatype Conversion",
-          "description": "Convert column datatypes (e.g., string to number, number to string)"
+          "description": "Convert column datatypes (e.g., string to number, number to string)",
+          "can_combine": True
       },
       "cross_join": {
           "name": "Cross Join",
-          "description": "Combine every row from one table with every row from another"
+          "description": "Combine every row from one table with every row from another",
+          "can_combine": True  # Should usually be combined with other operations
       },
       "pivot": {
           "name": "Pivot (Wide to Long)",
-          "description": "Transform data from wide format to long format (pandas only)"
+          "description": "Transform data from wide format to long format (pandas only)",
+          "can_combine": False,
+          "pandas_only": True
       },
       "melt": {
           "name": "Melt (Long to Wide)",
-          "description": "Transform data from long format to wide format (pandas only)"
+          "description": "Transform data from long format to wide format (pandas only)",
+          "can_combine": False,
+          "pandas_only": True
       }
   }
   ```
 
 **Verification:**
-- Generate 20 hard problems
+- Generate 30 hard problems
 - Should see mix of:
-  - Multi-skill problems (3-4 easy skills)
-  - Advanced topic problems (1 advanced topic)
-- Advanced topic problems should be clearly focused on that topic
+  - Multi-skill problems with cross_join + other operations (e.g., cross_join + filter + aggregate)
+  - Multi-skill problems (3-4 easy skills only)
+  - Standalone datatypes problems
+  - Standalone pivot/melt problems (pandas-only)
+- Cross join problems should feel realistic (not just cartesian product for its own sake)
 
 ---
 
@@ -459,15 +507,17 @@ This document outlines the next phase of development, focusing on:
 **Actions:**
 - Generate 30+ hard problems
 - Categorize by type:
-  - Multi-skill (3-4 easy skills): ~20 problems
-  - Advanced topics (datatypes, cross_join): ~5 problems each
+  - Multi-skill (3-4 easy skills): ~15 problems
+  - Multi-skill with cross_join: ~5 problems
+  - Advanced topics (datatypes): ~5 problems
   - Pivot/melt: ~5 problems
 - Manually solve 15 of them
 - Verify:
-  - Problems are genuinely difficult but solvable
+  - Problems are genuinely difficult but solvable with thought and effort
   - CTEs are helpful/necessary in SQL solutions
   - Advanced topics are tested correctly
   - Expected outputs match user solutions
+  - All solutions (pandas and SQL) are correct and verified
 - Create `test_hard_problems.py`:
   - Test multi-skill generation
   - Test CTE generation
@@ -476,7 +526,8 @@ This document outlines the next phase of development, focusing on:
 
 **Verification:**
 - Hard problems feel significantly more challenging than medium
-- Success rate on manual testing: aim for 60-70% solvable (harder is OK)
+- Problems should require careful thinking and multiple steps
+- All generated problems should be solvable (solutions should verify correctly)
 - CTE structure makes SQL solutions cleaner
 - Advanced topics are correctly implemented
 
@@ -509,20 +560,28 @@ This document outlines the next phase of development, focusing on:
 ---
 
 ### Step 12.2: Update Loading Messages
-**Task:** Make loading states more informative
+**Task:** Make loading states informative without revealing problem details
 **Actions:**
-- When generating problem, show:
-  - Selected dataset topic
-  - Selected skills (for medium/hard)
-  - Progress spinner
+- When generating problem, show generic loading messages with progress spinner
+- Loading messages should NEVER reveal:
+  - Dataset topic/domain
+  - Skills being tested
+  - Problem difficulty
+- All of this information should remain hidden until user clicks "Reveal Problem Info"
 - Examples:
-  - Easy: "Generating problem about library books using filter_rows..."
-  - Medium: "Generating problem about restaurant orders combining filter_rows and aggregations..."
-  - Hard: "Generating complex problem about flight bookings combining joins, filter_rows, derived_column, and order_by with CTEs..."
+  - Easy: "Generating new practice problem..."
+  - Medium: "Generating new practice problem..."
+  - Hard: "Generating new practice problem..."
+  - Or use a single message: "Generating practice problem..." with a spinner
+- Optional: Add variety to loading messages without revealing content:
+  - "Creating your next challenge..."
+  - "Preparing a new problem..."
+  - "Generating practice problem..."
 
 **Verification:**
-- Loading messages should be clear and informative
-- Should give insight into what's being generated without spoiling the problem
+- Loading messages should not reveal any hints about the problem
+- All problem details (topic, difficulty, skills) remain hidden until "Reveal Problem Info" is clicked
+- Consistent with existing design principle from summary.md: "Loading messages also never reveal the topic to avoid giving hints"
 
 ---
 
@@ -546,8 +605,12 @@ This document outlines the next phase of development, focusing on:
   - [ ] CTEs are used in medium/hard SQL solutions
   - [ ] Reference solutions button works
   - [ ] Solution verification works
-  - [ ] Dataset variety is noticeable
+  - [ ] Dataset variety is noticeable (100 diverse domains)
   - [ ] Statistics tracking works
+  - [ ] Export problem to JSON works
+  - [ ] Import problem from JSON works and preserves all data
+  - [ ] Loading messages never reveal topic or difficulty
+  - [ ] Problem info (topic, difficulty, skills) only shows after clicking "Reveal Problem Info"
   - [ ] UI is intuitive and responsive
 
 **Verification:**
@@ -565,6 +628,7 @@ Given the dependencies and complexity, here's the recommended implementation ord
    - Step 8.1, 8.2: Add variety quickly (high value, low risk)
    - Step 8.3, 8.4: Solution verification (important for quality)
    - Step 8.5: Reference solutions button (nice UX improvement)
+   - Step 8.6: Export/Import functionality (enables problem sharing/saving)
 
 2. **Then Phase 9 (Derived Column)**
    - Step 9.1, 9.2, 9.3: Add new easy skill (relatively simple)
@@ -634,6 +698,9 @@ For each phase:
 - The complexity jump from easy → medium → hard should be noticeable
 - Medium problems should feel like "2 easy problems combined"
 - Hard problems should feel like "multiple steps, need to think carefully"
-- Some hard problems will be quite difficult - that's intentional
+- All generated problems should be solvable (solutions should verify correctly)
 - Solution verification is critical for quality control
 - Dataset variety will make practice feel less repetitive
+- **Loading messages must NEVER reveal problem information** - all details (topic, difficulty, skills) should only be visible after clicking "Reveal Problem Info"
+- Domain-only dataset topics (e.g., "library", "hospital") give Claude flexibility to create appropriate table structures
+- Export/import enables users to save and share interesting problems with others
