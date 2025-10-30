@@ -187,7 +187,7 @@ Streamlit educational app that generates pandas/SQL practice problems on-the-fly
 
 ## Development Progress
 
-**Completed Steps:** 1.1 through 11.1
+**Completed Steps:** 1.1 through 11.2
 
 **Current State:**
 - ✅ Full basic app with execution and comparison
@@ -195,14 +195,14 @@ Streamlit educational app that generates pandas/SQL practice problems on-the-fly
 - ✅ 100-topic dataset library for variety
 - ✅ 8 foundational skills including derived_column (arithmetic, conditional, date subtypes)
 - ✅ Difficulty levels: Easy (1 skill), Medium (2-3 skills), Hard (advanced topics + multi-skill)
-- ✅ CTE requirements: Medium (50% chance), Hard (1-3 CTEs)
+- ✅ CTE requirements: Easy (never), Medium (50% chance, 1 CTE), Hard (always, 1-3 CTEs based on skill count)
 - ✅ Reference solutions UI, export/import functionality
 - ✅ Shared execution module (`execution.py`) prevents circular imports
 - ✅ Medium difficulty tested end-to-end (`test_medium_problems.py`)
 - ✅ Advanced topics for hard problems: datatypes, cross_join, pivot, melt
+- ✅ Hard problems always use CTEs with smart distribution (more skills = more CTEs)
 
 **Next Up (new-steps.md):**
-- Step 11.2: Implement CTE requirements for hard problems
 - Step 11.3: Handle pandas-only problems (pivot/melt)
 - Step 11.4: Test hard difficulty problems
 
