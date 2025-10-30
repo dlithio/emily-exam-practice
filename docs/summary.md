@@ -26,57 +26,61 @@ Think of this as a "map" of the codebase, not the codebase itself.
 -->
 
 ## Overview
-This is a Streamlit-based educational application that generates pandas and SQL practice problems on-the-fly using the Claude API. Users view dataframes, solve problems with code, and receive instant feedback by comparing their output to expected results.
+Streamlit educational app that generates pandas/SQL practice problems on-the-fly using Claude API. Users solve problems with code and receive instant feedback by comparing output to expected results.
 
 ---
 
 ## Core Application Files
 
 ### `app.py` (main Streamlit application)
-**Purpose:** Main UI and core functionality for problem practice
+**Purpose:** Main UI and problem practice workflow
+
+**Key Functions:**
+- `verify_problem_solutions(problem)` → verification results dict
+- `display_problem(problem)` - Renders problem UI
+- Imports execution functions from `execution.py`
+
+**UI Features:**
+- Difficulty selector: Easy (1 skill), Medium (2-3 skills), Hard (3-4 skills)
+- Multi-topic checkbox selector (empty = all topics)
+- "Reveal Problem Info" button (hides topic/difficulty until clicked)
+- "Show Reference Solutions" button (displays verified pandas/SQL solutions)
+- Export/Import problem as JSON
+- Generic loading messages (never reveal difficulty or topics)
+- Automatic solution verification with logging
+
+**Available Topics:** filter_columns, filter_rows, aggregations, distinct, joins, order_by, limit, derived_column
+
+**Dependencies:** `models.py`, `claude_client.py`, `execution.py`
+
+---
+
+### `execution.py` (code execution and comparison)
+**Purpose:** Shared execution utilities used by both `app.py` and `claude_client.py`
 
 **Key Functions:**
 - `execute_pandas(code, input_tables)` → (DataFrame | None, error | None)
 - `execute_sql(query, input_tables)` → (DataFrame | None, error | None)
 - `compare_dataframes(user_df, expected_df)` → (is_correct, feedback_message)
-- `verify_problem_solutions(problem)` → dict with verification results (pandas_valid, sql_valid, errors, feedback)
-- `display_problem(problem)` - Renders problem UI
+- `time_limit(seconds)` - Context manager for 5-second timeout
 
-**Critical Features:**
-- 5-second execution timeout for user code safety
-- Difficulty selector (Easy, Medium, Hard) - controls skill composition
-- Multi-topic checkbox selector (empty = all topics)
-- "Reveal Problem Info" button (hides topic/difficulty until clicked)
-- "Show Reference Solutions" button (displays Claude's verified pandas and SQL solutions in expandable sections)
-- "Export Problem" button (downloads current problem as JSON file with timestamp)
-- "Import Problem" file uploader (loads problem from JSON with validation and error handling)
-- Robust API error handling (keeps previous problem on failure)
-- Session state for persistence across reruns
-- Automatic verification of Claude's reference solutions with logging
-- Generic loading messages (never reveal difficulty or topics before problem is revealed)
+**Safety Features:**
+- Restricted namespace for pandas execution
+- In-memory SQLite for SQL execution
+- 5-second timeout with graceful fallback for Windows/Streamlit
 
-**Available Topics:** filter_columns, filter_rows, aggregations, distinct, joins, order_by, limit, derived_column
-
-**Difficulty Levels:**
-- Easy: 1 skill, no CTEs
-- Medium: 2-3 skills, 50% chance of 1 CTE
-- Hard: 3-4 skills, always uses CTEs (1-3 depending on complexity)
-
-**Dependencies:** `models.py` (Problem), `claude_client.py` (generate_problem)
+**Note:** Avoids circular imports by being standalone module
 
 ---
 
 ### `models.py` (data structures)
-**Purpose:** Core data model for practice problems
+**Purpose:** Core data model
 
 **Classes:**
-- `Problem` (dataclass) - Contains input_tables (dict), question (str), expected_output (DataFrame), topic (str), difficulty (str), pandas_solution (Optional[str]), sql_solution (Optional[str])
-- Solutions are Claude's reference implementations that produce the expected output
+- `Problem` (dataclass) - input_tables, question, expected_output, topic, difficulty, pandas_solution, sql_solution
 
 **Key Methods:**
-- `to_json()` → Dict[str, Any] - Serializes Problem to JSON-compatible dict (converts DataFrames to JSON format)
-- `from_json(json_dict)` → Problem - Creates Problem from JSON dict with validation
-- `__repr__()` → str - Pretty prints problem structure
+- `to_json()` / `from_json()` - Serialize/deserialize with DataFrame conversion
 
 ---
 
@@ -86,212 +90,120 @@ This is a Streamlit-based educational application that generates pandas and SQL 
 **Key Functions:**
 - `generate_problem(topic, difficulty, selected_topics, use_cache)` → Problem
 - `build_problem_generation_prompt(skills, difficulty, dataset_topic, use_cte, num_ctes)` → str
-- `select_random_topic()` → str
-- Helper functions: get_api_key(), get_client(), strip_markdown_code_blocks()
 
 **Model:** `claude-sonnet-4-5-20250929`
 
+**Critical Behavior:**
+- Claude generates `pandas_solution` and `sql_solution` (NOT expected_output)
+- Both solutions are executed using `execution.py`
+- `expected_output` is derived from executed solutions (must match exactly)
+- Problems are rejected if solutions don't match or fail execution
+- This ensures every generated problem is guaranteed solvable and correct
+
 **Prompt Design:**
-- Plain English questions (no SQL/pandas terminology)
-- Easy = ONE operation only, Medium = 2-3 skills, Hard = 3-4 skills
-- JSON structured output with pandas_solution and sql_solution fields
-- Must be solvable in both pandas AND SQL
-- Random dataset topic selection for variety (integrated in Step 8.2)
-- Reference solutions: pandas assigns to 'result', SQL is complete SELECT query
-- Multi-skill combination guidance with natural examples
-- CTE requirements for medium/hard problems (optional for medium, required for hard)
-- Derived column subtypes:
-  - Easy difficulty: Arithmetic (math operations), Conditional (boolean/category)
-  - Medium/Hard: Also includes Date (extract date components)
+- Plain English questions, solvable in both pandas and SQL
+- Uses random dataset topic from 100-topic library for variety
+- Multi-skill combinations for medium/hard (2-3 or 3-4 skills)
+- CTE requirements: Easy (none), Medium (50% chance), Hard (1-3 CTEs)
+- Derived column subtypes: Arithmetic, Conditional (Easy+), Date (Medium+)
 
-**Integration (Step 10.2):**
-- Uses `difficulty_manager` to select skills and determine CTE requirements
-- Generates multi-skill problems for medium/hard difficulty
-- Backward compatible with single-topic mode
-
-**Dependencies:** `models.py` (Problem), `dataset_topics.py` (get_random_topic), `difficulty_manager.py` (select_skills_for_difficulty, should_use_cte)
+**Dependencies:** `models.py`, `dataset_topics.py`, `difficulty_manager.py`, `execution.py`
 
 ---
 
-### `dataset_topics.py` (dataset variety library)
-**Purpose:** Provides 100 diverse domain topics for problem variety
+### `dataset_topics.py`
+**Purpose:** 100 diverse domain topics for variety
 
 **Key Content:**
-- `DATASET_TOPICS` - List of 100 domain names across 14 categories (business, education, tech, healthcare, etc.)
+- `DATASET_TOPICS` - 100 domains across 14 categories
 - `get_random_topic()` - Returns random topic
-- Topics are 1-2 word domains (e.g., "library", "hospital") giving Claude flexibility
-
-**Integration:** Fully integrated in Step 8.2 - every problem now uses a random dataset topic
+- Topics are 1-2 words (e.g., "library", "hospital")
 
 ---
 
-### `main.py`
-**Purpose:** Simple hello world entry point (not actively used)
-
----
-
-### `difficulty_manager.py` (skill composition logic)
-**Purpose:** Handles skill selection and CTE requirements for different difficulty levels
+### `difficulty_manager.py`
+**Purpose:** Skill selection and CTE requirements logic
 
 **Key Functions:**
 - `select_skills_for_difficulty(difficulty, selected_topics)` → List[str]
-- `should_use_cte(difficulty, skills)` → (use_cte: bool, num_ctes: int)
+- `should_use_cte(difficulty, skills)` → (use_cte, num_ctes)
 
-**Constants:**
-- `EASY_SKILLS` - List of 8 foundational topics (filter_columns, filter_rows, aggregations, distinct, joins, order_by, limit, derived_column)
-
-**Logic:**
-- Easy: 1 skill, no CTEs
-- Medium: 2-3 skills, 50% chance of 1 CTE
-- Hard: 3-4 skills, always uses CTEs (1-3 depending on skill count)
-
-**Integration:** Will be used by claude_client.py for medium/hard problem generation (Step 10.2+)
+**Logic:** Easy (1 skill, no CTEs), Medium (2-3 skills, 50% CTE), Hard (3-4 skills, 1-3 CTEs)
 
 ---
 
 ## Test Files
 
-**Available Tests:**
-- `test_pandas_execution.py` - Tests execute_pandas() with valid/invalid cases
-- `test_sql_execution.py` - Tests execute_sql() with valid/invalid queries
-- `test_comparison.py` - Tests compare_dataframes() logic (10 test cases covering matches, mismatches, ordering, type tolerance)
-- `test_prompt_generation.py` - Tests Claude API prompt and JSON response parsing
-- `test_generate_problem.py` - Tests full generate_problem() workflow
-- `test_timeout.py` - Tests 5-second timeout for pandas and SQL execution
-- `test_edge_case.py` - Tests incomplete SQL queries
-- `test_pandas_error.py` - Tests error traceback handling
-- `test_solution_verification.py` - Tests verify_problem_solutions() function with multiple problems (100% success rate)
-- `test_export_import.py` - Tests Problem.to_json() and Problem.from_json() with data integrity checks and error handling
-- `test_derived_column.py` - Comprehensive tests for all derived_column subtypes (Arithmetic, Conditional, Date) in both pandas and SQL
+**Test Coverage:**
+- Execution: pandas/SQL execution, timeout, error handling
+- Comparison: DataFrame comparison with type tolerance
+- Generation: Claude API integration, prompt generation, solution verification
+- Features: Export/import, derived_column subtypes
+- Edge cases: Invalid queries, incomplete code, timeouts
 
-**Key Testing Details:**
-- DataFrame comparison: Lenient with int/float types, strict row/column order, float tolerance (rtol=1e-5, atol=1e-8)
-- All tests use sample employees DataFrame for consistency
+**Note:** DataFrame comparison is lenient with int/float types but strict on row/column order
 
 ---
 
 ## File Dependencies
 
 **Import Chain:**
-- `app.py` → imports `models.py`, `claude_client.py`
-- `claude_client.py` → imports `models.py`, `dataset_topics.py`, `difficulty_manager.py`
-- `dataset_topics.py` → standalone library (provides topics)
-- `difficulty_manager.py` → standalone library (provides skill selection logic)
-- Test files → import from `app.py` and `claude_client.py`
+- `app.py` → `models.py`, `claude_client.py`, `execution.py`
+- `claude_client.py` → `models.py`, `dataset_topics.py`, `difficulty_manager.py`, `execution.py`
+- `execution.py` → standalone (avoids circular imports)
+- `dataset_topics.py`, `difficulty_manager.py` → standalone libraries
 
 ---
 
 ## Key Technical Decisions
 
+**Quality Assurance (Critical):**
+- Claude generates solutions, NOT expected_output
+- Expected output derived by executing both solutions
+- Problems rejected if solutions don't match or fail
+- Guarantees every problem is solvable and correct
+
 **Execution Safety:**
-- Pandas: Restricted namespace (only pd, input tables, builtins)
-- SQL: In-memory SQLite (`:memory:`)
-- 5-second timeout using signal (Unix/macOS) with graceful fallback for Windows/Streamlit threading
-
-**Error Handling:**
-- API failures keep previous problem (don't leave user stuck)
-- Full tracebacks for debugging user code errors
-- Specific error messages for common API issues (auth, timeout, rate limits)
-- Solution verification logs warnings when reference solutions fail but accepts problem (MVP approach)
-
-**Comparison Logic:**
-- Strict row and column order
-- Lenient with int/float type differences
-- Float tolerance: rtol=1e-5, atol=1e-8
+- 5-second timeout with graceful fallback
+- Restricted namespace (pandas), in-memory DB (SQL)
+- Strict row/column order, lenient type comparison
 
 **UX Patterns:**
-- "Reveal Problem Info" hides topic/difficulty until clicked (prevents hints)
 - Loading messages never reveal problem details
-- Multi-topic selector (empty = random from all topics)
+- "Reveal Problem Info" hides topic/difficulty until clicked
+- API failures keep previous problem (don't leave user stuck)
 
 ---
 
 ## Development Progress
 
-**Completed:** Steps 1.1 through 10.3 (full basic app + topic library + random topic integration + reference solutions + solution verification + reference solutions UI + export/import functionality + derived_column topic with all subtypes fully tested + skill composition logic + multi-skill problem generation + difficulty selection UI)
+**Completed Steps:** 1.1 through 10.3
 
-**What's New in Step 10.3:**
-- Added difficulty selector radio buttons in sidebar (Easy, Medium, Hard)
-- Difficulty selection stored in session state
-- Updated all `generate_problem()` calls to pass `difficulty` and `selected_topics` parameters
-- Removed legacy single-topic selection logic (now using skill composition from difficulty_manager)
-- Updated problem info display to show "Multiple Skills" for multi_skill problems
-- Generic loading message: "Generating practice problem..." (doesn't reveal difficulty or topics)
-- Problem difficulty and skills only shown after clicking "Reveal Problem Info"
-- Users can now select difficulty level before generating problems
-- Medium and Hard difficulties will generate multi-skill problems (2-3 skills for medium, 3-4 for hard)
+**Current State:**
+- ✅ Full basic app with execution and comparison
+- ✅ Claude API integration with quality assurance (solutions verified before accepting problem)
+- ✅ 100-topic dataset library for variety
+- ✅ 8 foundational skills including derived_column (arithmetic, conditional, date subtypes)
+- ✅ Difficulty levels: Easy (1 skill), Medium (2-3 skills), Hard (3-4 skills)
+- ✅ CTE requirements: Medium (50% chance), Hard (1-3 CTEs)
+- ✅ Reference solutions UI, export/import functionality
+- ✅ Shared execution module (`execution.py`) prevents circular imports
 
-**What's New in Step 10.2:**
-- Integrated `difficulty_manager` with `claude_client.py` for multi-skill problem generation
-- Updated `generate_problem()` function:
-  - Now accepts `selected_topics` parameter (list of user-selected topics)
-  - Uses `select_skills_for_difficulty()` to determine which skills to combine
-  - Uses `should_use_cte()` to determine CTE requirements
-  - Backward compatible with legacy single-topic mode
-  - Logs selected skills and CTE requirements for debugging
-- Updated `build_problem_generation_prompt()` function:
-  - Accepts list of skills instead of single topic
-  - Accepts CTE parameters (use_cte, num_ctes)
-  - Generates multi-skill combination instructions with natural examples
-  - Generates CTE requirement instructions with example structures
-  - Adapts prompt based on number of skills and difficulty level
-- Updated `_cached_generate_problem()` to handle new parameters
-- Added comprehensive multi-skill guidance in prompts:
-  - Natural skill combinations (e.g., derived_column + filter_rows, joins + aggregations)
-  - CTE structure examples (1, 2, or 3 CTEs)
-  - Clear instructions for Claude to combine skills naturally
-- Topic field set to "multi_skill" for problems with multiple skills
-- Tested with medium difficulty: Successfully generates 2-3 skill problems with optional CTEs
-- Tested with easy difficulty: Backward compatibility maintained (single skill, no CTEs)
-
-**What's New in Step 8.6:**
-- Added "Export Problem" button in sidebar "Save & Share" section
-- Export generates JSON file with format: `problem_{topic}_{timestamp}.json`
-- Added "Import Problem" file uploader with comprehensive validation
-- Import includes error handling for invalid JSON, missing fields, and malformed data
-- JSON format preserves all problem data: input_tables, question, expected_output, topic, difficulty, pandas_solution, sql_solution
-- DataFrames serialized as {columns: [...], data: [{...}, ...]} format for readability
-- Import automatically clears previous session state and loads new problem
-- Success messages display imported problem's topic and difficulty
-- File ID tracking prevents re-processing uploads on rerun (fixes Streamlit MediaFileHandler errors)
-- Import tracking resets when generating new problem (allows re-importing same file)
-- Added `Problem.to_json()` and `Problem.from_json()` methods to models.py
-- Added `test_export_import.py` for testing serialization integrity and error handling
-- Added `test_import_logic.py` for testing file ID tracking and import logic
-
-**What's New in Step 9.1:**
-- Added "derived_column" as new easy skill (8th foundational topic)
-- Added derived_column to TOPICS list in app.py
-- Added topic description in claude_client.py topic_descriptions mapping
-- Implemented derived_column subtypes with difficulty-based selection:
-  - Arithmetic: Math operations on existing columns (e.g., total = price * quantity)
-  - Conditional: Boolean/categorical columns (e.g., is_passing = score >= 60)
-  - Date: Extract date components (e.g., year from timestamp) - Medium/Hard only
-- Easy difficulty only uses Arithmetic and Conditional (Date requires pd.to_datetime conversion)
-- Prompt builder now includes derived_column-specific instructions
-- Topic appears in sidebar checkbox list for user selection
-
-**What's New in Steps 9.2 & 9.3:**
-- Step 9.2 (Prompt Enhancement): Enhanced build_problem_generation_prompt() in claude_client.py:171-196
-  - Random subtype selection based on difficulty (Easy: Arithmetic/Conditional only; Medium/Hard: includes Date)
-  - Detailed examples for each subtype (arithmetic formulas, conditional logic, date extraction)
-  - Clear instructions for Claude to create problems requiring derived columns in output
-- Step 9.3 (Comprehensive Testing): Created test_derived_column.py with 6 test cases:
-  - Arithmetic derivation (single and multi-column: price*quantity, math+english)
-  - Conditional derivation (boolean: score>=60, categorical: tier in ['Gold','Platinum'])
-  - Date derivation (year and month extraction from date strings)
-  - All tests verify both pandas and SQL implementations work correctly
-- Generated and verified 5+ actual problems using Claude API - 100% success rate
-- All three subtypes generate valid problems solvable in both pandas and SQL
+**Recent Fix (Post-10.3):**
+- Created `execution.py` to avoid circular imports
+- Changed workflow: Claude generates solutions → execute both → derive expected_output
+- Problems now rejected if solutions don't match or fail execution
+- Guarantees every generated problem is solvable and correct
 
 **Next Up (new-steps.md):**
-- Step 10.4: Test medium difficulty problems end-to-end in the UI
-- Step 11: Hard difficulty (3-4 skills + advanced topics like pivot/melt/cross_join)
+- Step 10.4: Test medium difficulty end-to-end
+- Step 11: Hard difficulty with advanced topics (pivot/melt/cross_join)
 
 ---
 
 ## Running the App
 
-**Start app:** `uv run streamlit run app.py`
-**Run tests:** `uv run python test_*.py`
-**Env required:** `ANTHROPIC_API_KEY` (or in `.streamlit/secrets.toml`)
+**Commands:**
+- Start: `uv run streamlit run app.py`
+- Tests: `uv run python test_*.py`
+- Env: `ANTHROPIC_API_KEY` required

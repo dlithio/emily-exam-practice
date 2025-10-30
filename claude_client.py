@@ -328,30 +328,25 @@ Return your response as a JSON object with this EXACT structure:
     }}
   }},
   "question": "Clear description of what to do...",
-  "expected_output": {{
-    "columns": ["col1", "col2", ...],
-    "data": [
-      [val1, val2, ...],
-      [val1, val2, ...]
-    ]
-  }},
   "topic": "{skills[0] if len(skills) == 1 else 'multi_skill'}",
   "difficulty": "{difficulty}",
   "pandas_solution": "result = ...",
   "sql_solution": "SELECT ..."
 }}
 
-REFERENCE SOLUTIONS REQUIREMENT:
-You MUST provide both a pandas solution and a SQL solution that produce the exact expected_output:
+REFERENCE SOLUTIONS REQUIREMENT (CRITICAL):
+You MUST provide both a pandas solution and a SQL solution that produce IDENTICAL results:
 - pandas_solution: Complete pandas code that assigns the final result to a variable named 'result'.
   The input table names will be available as DataFrame variables.
   Example: "result = employees[employees['salary'] > 70000]"
 - sql_solution: Complete SELECT query that works with standard SQL.
   The input tables will be available as SQL tables with the same names.
   Example: "SELECT * FROM employees WHERE salary > 70000"
-- Both solutions MUST produce exactly the expected_output DataFrame
-- Test your solutions mentally to ensure they work correctly
-- Make sure column names, types, and row order match the expected_output exactly
+- CRITICAL: Both solutions MUST produce EXACTLY THE SAME output DataFrame
+- Both solutions must return the same columns in the same order
+- Both solutions must return the same rows in the same order
+- Test your solutions mentally to ensure they work correctly and produce identical results
+- The pandas and SQL solutions will be executed and compared - they MUST match exactly
 
 IMPORTANT GUIDELINES:
 - Keep data small and realistic (real-world scenarios like employees, sales, products)
@@ -375,13 +370,6 @@ Example JSON format (for reference only - generate a NEW problem):
     }}
   }},
   "question": "Show all employees who work in the Engineering department.",
-  "expected_output": {{
-    "columns": ["name", "department", "salary"],
-    "data": [
-      ["Alice", "Engineering", 95000],
-      ["Charlie", "Engineering", 88000]
-    ]
-  }},
   "topic": "filter_rows",
   "difficulty": "easy",
   "pandas_solution": "result = employees[employees['department'] == 'Engineering']",
@@ -534,8 +522,8 @@ def generate_problem(
                 f"Response preview: {response_text[:200]}..."
             )
 
-        # Validate required fields
-        required_fields = ["input_tables", "question", "expected_output", "topic", "difficulty"]
+        # Validate required fields (note: expected_output is now derived from solutions, not provided by Claude)
+        required_fields = ["input_tables", "question", "topic", "difficulty", "pandas_solution", "sql_solution"]
         missing_fields = [field for field in required_fields if field not in problem_data]
         if missing_fields:
             raise ValueError(
@@ -551,23 +539,64 @@ def generate_problem(
             except Exception as e:
                 raise ValueError(f"Failed to convert input table '{table_name}' to DataFrame: {e}")
 
-        # Convert expected output to DataFrame
-        try:
-            expected_output = _json_to_dataframe(problem_data["expected_output"])
-        except Exception as e:
-            raise ValueError(f"Failed to convert expected output to DataFrame: {e}")
-
         # Validate that we have at least one input table
         if not input_tables:
             raise ValueError("API response contains no input tables. Please try again.")
 
-        # Validate that expected output has data
-        if expected_output.empty:
-            raise ValueError("API response contains empty expected output. Please try again.")
-
-        # Extract optional solution fields
+        # Extract solution fields (now required)
         pandas_solution = problem_data.get("pandas_solution")
         sql_solution = problem_data.get("sql_solution")
+
+        if not pandas_solution or not sql_solution:
+            raise ValueError("API response is missing pandas_solution or sql_solution. Please try again.")
+
+        # Execute both solutions to derive expected_output and verify they match
+        # Import here to avoid circular dependency
+        from execution import execute_pandas, execute_sql, compare_dataframes
+
+        # Execute pandas solution
+        pandas_result, pandas_error = execute_pandas(pandas_solution, input_tables)
+        if pandas_error:
+            raise ValueError(
+                f"Claude's pandas solution failed to execute. This is a problem generation error.\n"
+                f"Pandas solution: {pandas_solution}\n"
+                f"Error: {pandas_error}"
+            )
+
+        if pandas_result is None or pandas_result.empty:
+            raise ValueError(
+                f"Claude's pandas solution produced no output. This is a problem generation error.\n"
+                f"Pandas solution: {pandas_solution}"
+            )
+
+        # Execute SQL solution
+        sql_result, sql_error = execute_sql(sql_solution, input_tables)
+        if sql_error:
+            raise ValueError(
+                f"Claude's SQL solution failed to execute. This is a problem generation error.\n"
+                f"SQL solution: {sql_solution}\n"
+                f"Error: {sql_error}"
+            )
+
+        if sql_result is None or sql_result.empty:
+            raise ValueError(
+                f"Claude's SQL solution produced no output. This is a problem generation error.\n"
+                f"SQL solution: {sql_solution}"
+            )
+
+        # Compare pandas and SQL results - they must match EXACTLY
+        is_match, feedback = compare_dataframes(pandas_result, sql_result)
+        if not is_match:
+            raise ValueError(
+                f"Claude's pandas and SQL solutions produce different results. This is a problem generation error.\n"
+                f"Pandas solution: {pandas_solution}\n"
+                f"SQL solution: {sql_solution}\n"
+                f"Mismatch details: {feedback}\n"
+                f"Pandas result shape: {pandas_result.shape}, SQL result shape: {sql_result.shape}"
+            )
+
+        # Use the pandas result as the expected output (they're identical)
+        expected_output = pandas_result.copy()
 
         # Create and return Problem object
         return Problem(
