@@ -2,7 +2,12 @@
 Claude API client for generating practice problems.
 """
 import os
+import json
+from typing import Optional
+from functools import lru_cache
 from anthropic import Anthropic
+import pandas as pd
+from models import Problem
 
 # Default model for problem generation
 # Update this to the latest available model from https://docs.anthropic.com/en/docs/models-overview
@@ -207,6 +212,130 @@ Generate a NEW problem now (not the example above).
 CRITICAL: Return ONLY the raw JSON object. Do NOT wrap it in markdown code blocks or ```json tags. Do NOT include any explanatory text before or after the JSON. Start your response with {{ and end with }}."""
 
     return prompt
+
+
+def _json_to_dataframe(json_table: dict) -> pd.DataFrame:
+    """
+    Convert JSON table representation to pandas DataFrame.
+
+    Args:
+        json_table: Dict with "columns" and "data" keys
+
+    Returns:
+        pd.DataFrame: Converted DataFrame
+    """
+    columns = json_table["columns"]
+    data = json_table["data"]
+    return pd.DataFrame(data, columns=columns)
+
+
+@lru_cache(maxsize=32)
+def _cached_generate_problem(topic: str, difficulty: str, cache_key: int) -> str:
+    """
+    Cached version of API call to avoid regenerating during development.
+
+    Args:
+        topic: Topic for the problem
+        difficulty: Difficulty level
+        cache_key: Arbitrary key to control cache invalidation
+
+    Returns:
+        str: Raw JSON response from API
+    """
+    client = get_client()
+    prompt = build_problem_generation_prompt(topic, difficulty)
+
+    response = client.messages.create(
+        model=DEFAULT_MODEL,
+        max_tokens=2000,
+        messages=[
+            {"role": "user", "content": prompt}
+        ]
+    )
+
+    return response.content[0].text
+
+
+def generate_problem(topic: str, difficulty: str = "easy", use_cache: bool = True) -> Problem:
+    """
+    Generate a practice problem using Claude API.
+
+    Args:
+        topic: The skill to focus on (e.g., "filter_rows", "group_by", "joins")
+        difficulty: Problem difficulty ("easy", "medium", "hard")
+        use_cache: Whether to use cached responses (default True for development)
+
+    Returns:
+        Problem: Generated problem object with input tables, question, and expected output
+
+    Raises:
+        ValueError: If API response is invalid or unparseable
+        Exception: If API call fails
+    """
+    try:
+        # Call API (with or without cache)
+        if use_cache:
+            # Using hash of topic+difficulty as cache key for reproducibility
+            cache_key = hash(f"{topic}_{difficulty}") % 1000
+            response_text = _cached_generate_problem(topic, difficulty, cache_key)
+        else:
+            client = get_client()
+            prompt = build_problem_generation_prompt(topic, difficulty)
+            response = client.messages.create(
+                model=DEFAULT_MODEL,
+                max_tokens=2000,
+                messages=[
+                    {"role": "user", "content": prompt}
+                ]
+            )
+            response_text = response.content[0].text
+
+        # Parse JSON response
+        cleaned_response = strip_markdown_code_blocks(response_text)
+
+        try:
+            problem_data = json.loads(cleaned_response)
+        except json.JSONDecodeError as e:
+            raise ValueError(
+                f"Failed to parse API response as JSON: {e}\n"
+                f"Raw response: {response_text[:200]}..."
+            )
+
+        # Validate required fields
+        required_fields = ["input_tables", "question", "expected_output", "topic", "difficulty"]
+        missing_fields = [field for field in required_fields if field not in problem_data]
+        if missing_fields:
+            raise ValueError(f"API response missing required fields: {missing_fields}")
+
+        # Convert JSON tables to DataFrames
+        input_tables = {}
+        for table_name, table_data in problem_data["input_tables"].items():
+            try:
+                input_tables[table_name] = _json_to_dataframe(table_data)
+            except Exception as e:
+                raise ValueError(f"Failed to convert input table '{table_name}' to DataFrame: {e}")
+
+        # Convert expected output to DataFrame
+        try:
+            expected_output = _json_to_dataframe(problem_data["expected_output"])
+        except Exception as e:
+            raise ValueError(f"Failed to convert expected output to DataFrame: {e}")
+
+        # Create and return Problem object
+        return Problem(
+            input_tables=input_tables,
+            question=problem_data["question"],
+            expected_output=expected_output,
+            topic=problem_data["topic"],
+            difficulty=problem_data["difficulty"]
+        )
+
+    except ValueError:
+        # Re-raise ValueError with original message
+        raise
+    except Exception as e:
+        # Wrap other exceptions with more context
+        raise Exception(f"Failed to generate problem: {e}")
 
 
 if __name__ == "__main__":
