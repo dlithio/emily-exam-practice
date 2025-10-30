@@ -70,8 +70,8 @@ def verify_problem_solutions(problem: Problem) -> dict:
         else:
             result['pandas_feedback'] = "Pandas solution failed to execute"
 
-    # Verify SQL solution
-    if problem.sql_solution:
+    # Verify SQL solution (skip for pandas-only problems)
+    if problem.sql_solution and not problem.pandas_only:
         sql_result, sql_error = execute_sql(
             problem.sql_solution,
             problem.input_tables
@@ -84,6 +84,10 @@ def verify_problem_solutions(problem: Problem) -> dict:
             result['sql_feedback'] = feedback
         else:
             result['sql_feedback'] = "SQL solution failed to execute"
+    elif problem.pandas_only:
+        # For pandas-only problems, mark SQL as valid (N/A)
+        result['sql_valid'] = True
+        result['sql_feedback'] = "N/A (pandas-only problem)"
 
     return result
 
@@ -389,12 +393,25 @@ display_problem(st.session_state.current_problem)
 # Your Code Section
 st.header("Your Code")
 
-# Language selection
-language = st.radio(
-    "Select language:",
-    options=["Pandas", "SQL"],
-    horizontal=True
-)
+# Check if this is a pandas-only problem
+if st.session_state.current_problem.pandas_only:
+    st.info("ℹ️ This problem tests pandas-specific functionality (pivot/melt)")
+    language = "Pandas"  # Force pandas language
+    # Show disabled language selector to indicate SQL is not available
+    st.radio(
+        "Select language:",
+        options=["Pandas"],
+        horizontal=True,
+        disabled=True,
+        help="SQL is not available for this problem as it tests pandas-specific operations"
+    )
+else:
+    # Language selection (both pandas and SQL available)
+    language = st.radio(
+        "Select language:",
+        options=["Pandas", "SQL"],
+        horizontal=True
+    )
 
 # Helpful info about code execution
 st.caption(f"💡 Code execution has a {EXECUTION_TIMEOUT} second timeout limit")

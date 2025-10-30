@@ -149,7 +149,14 @@ def build_problem_generation_prompt(
         "order_by": "arranging data in a specific order (ascending or descending)",
         "limit": "showing only the first few rows of results",
         "derived_column": "creating a new column based on existing column values",
+        "datatypes": "converting and casting column datatypes (e.g., string to number, number to string)",
+        "cross_join": "creating every possible combination of rows from two tables (cartesian product)",
+        "pivot": "transforming data from wide format to long format (pandas-specific reshaping)",
+        "melt": "transforming data from long format to wide format (pandas-specific reshaping)",
     }
+
+    # Check if this is a pandas-only problem (pivot or melt)
+    is_pandas_only = any(skill in ["pivot", "melt"] for skill in skills)
 
     # Build skill descriptions
     if len(skills) == 1:
@@ -210,6 +217,23 @@ DERIVED COLUMN SUBTYPE: {subtype_name}
 Your problem should ask the user to create this new derived column and show it in the output.
 The expected output should include the new column.
 Make sure the problem is solvable in both pandas and SQL.
+"""
+
+    # Add special instructions for pivot/melt topics (pandas-only)
+    pandas_only_instruction = ""
+    if is_pandas_only:
+        pandas_only_instruction = f"""
+PANDAS-ONLY PROBLEM:
+This problem tests pandas-specific functionality (pivot or melt) that has no direct SQL equivalent.
+- You only need to provide a pandas_solution
+- Set sql_solution to null in your JSON response
+- Focus on creating a clear, realistic example of data transformation
+- For pivot: Transform wide data to long format (e.g., unpivot multiple columns into rows)
+- For melt: Transform long data to wide format (e.g., create columns from row values)
+
+Examples:
+- Pivot: Convert monthly sales columns (Jan, Feb, Mar) into rows with (Month, Sales) pairs
+- Melt: Convert transaction rows (Customer, Product, Amount) into columns (Customer, Product1_Amount, Product2_Amount)
 """
 
     # Add multi-skill combination guidance
@@ -276,13 +300,19 @@ step3 AS (
 SELECT ... FROM step3 ORDER BY ...
 """
 
+    # Adjust requirements based on whether it's pandas-only
+    if is_pandas_only:
+        compatibility_requirement = "4. This is a PANDAS-ONLY problem (no SQL solution required)"
+    else:
+        compatibility_requirement = "4. Ensure the problem can be solved in BOTH pandas AND SQL"
+
     prompt = f"""Generate a pandas/SQL practice problem focused on {topic_desc}.
-{dataset_instruction}{derived_column_instruction}{multi_skill_instruction}{cte_instruction}
+{dataset_instruction}{derived_column_instruction}{pandas_only_instruction}{multi_skill_instruction}{cte_instruction}
 REQUIREMENTS:
 1. Create 1-2 small DataFrames as input tables with realistic column names and data
 2. Write a clear word problem describing what the user should do
 3. Provide the expected output DataFrame showing the correct answer
-4. Ensure the problem can be solved in BOTH pandas AND SQL
+{compatibility_requirement}
 5. Difficulty: {difficulty} - {difficulty_guide}
 
 {skills_focus}
@@ -331,22 +361,22 @@ Return your response as a JSON object with this EXACT structure:
   "topic": "{skills[0] if len(skills) == 1 else 'multi_skill'}",
   "difficulty": "{difficulty}",
   "pandas_solution": "result = ...",
-  "sql_solution": "SELECT ..."
+  "sql_solution": {"null" if is_pandas_only else '"SELECT ..."'}
 }}
 
 REFERENCE SOLUTIONS REQUIREMENT (CRITICAL):
-You MUST provide both a pandas solution and a SQL solution that produce IDENTICAL results:
+{"For pandas-only problems (pivot/melt), you only need to provide a pandas solution:" if is_pandas_only else "You MUST provide both a pandas solution and a SQL solution that produce IDENTICAL results:"}
 - pandas_solution: Complete pandas code that assigns the final result to a variable named 'result'.
   The input table names will be available as DataFrame variables.
   Example: "result = employees[employees['salary'] > 70000]"
-- sql_solution: Complete SELECT query that works with standard SQL.
+{"- sql_solution: Set to null (this is a pandas-only problem)" if is_pandas_only else """- sql_solution: Complete SELECT query that works with standard SQL.
   The input tables will be available as SQL tables with the same names.
   Example: "SELECT * FROM employees WHERE salary > 70000"
 - CRITICAL: Both solutions MUST produce EXACTLY THE SAME output DataFrame
 - Both solutions must return the same columns in the same order
 - Both solutions must return the same rows in the same order
 - Test your solutions mentally to ensure they work correctly and produce identical results
-- The pandas and SQL solutions will be executed and compared - they MUST match exactly
+- The pandas and SQL solutions will be executed and compared - they MUST match exactly"""}
 
 IMPORTANT GUIDELINES:
 - Keep data small and realistic (real-world scenarios like employees, sales, products)
@@ -543,12 +573,19 @@ def generate_problem(
         if not input_tables:
             raise ValueError("API response contains no input tables. Please try again.")
 
-        # Extract solution fields (now required)
+        # Extract solution fields
         pandas_solution = problem_data.get("pandas_solution")
         sql_solution = problem_data.get("sql_solution")
 
-        if not pandas_solution or not sql_solution:
-            raise ValueError("API response is missing pandas_solution or sql_solution. Please try again.")
+        # Check if this is a pandas-only problem
+        is_pandas_only = any(skill in ["pivot", "melt"] for skill in skills)
+
+        # Validate solutions based on problem type
+        if not pandas_solution:
+            raise ValueError("API response is missing pandas_solution. Please try again.")
+
+        if not is_pandas_only and not sql_solution:
+            raise ValueError("API response is missing sql_solution. Please try again.")
 
         # Execute both solutions to derive expected_output and verify they match
         # Import here to avoid circular dependency
@@ -569,34 +606,40 @@ def generate_problem(
                 f"Pandas solution: {pandas_solution}"
             )
 
-        # Execute SQL solution
-        sql_result, sql_error = execute_sql(sql_solution, input_tables)
-        if sql_error:
-            raise ValueError(
-                f"Claude's SQL solution failed to execute. This is a problem generation error.\n"
-                f"SQL solution: {sql_solution}\n"
-                f"Error: {sql_error}"
-            )
+        # For pandas-only problems, skip SQL execution and comparison
+        if is_pandas_only:
+            # Use the pandas result as the expected output
+            expected_output = pandas_result.copy()
+            sql_solution = None  # Set to None for pandas-only problems
+        else:
+            # Execute SQL solution
+            sql_result, sql_error = execute_sql(sql_solution, input_tables)
+            if sql_error:
+                raise ValueError(
+                    f"Claude's SQL solution failed to execute. This is a problem generation error.\n"
+                    f"SQL solution: {sql_solution}\n"
+                    f"Error: {sql_error}"
+                )
 
-        if sql_result is None or sql_result.empty:
-            raise ValueError(
-                f"Claude's SQL solution produced no output. This is a problem generation error.\n"
-                f"SQL solution: {sql_solution}"
-            )
+            if sql_result is None or sql_result.empty:
+                raise ValueError(
+                    f"Claude's SQL solution produced no output. This is a problem generation error.\n"
+                    f"SQL solution: {sql_solution}"
+                )
 
-        # Compare pandas and SQL results - they must match EXACTLY
-        is_match, feedback = compare_dataframes(pandas_result, sql_result)
-        if not is_match:
-            raise ValueError(
-                f"Claude's pandas and SQL solutions produce different results. This is a problem generation error.\n"
-                f"Pandas solution: {pandas_solution}\n"
-                f"SQL solution: {sql_solution}\n"
-                f"Mismatch details: {feedback}\n"
-                f"Pandas result shape: {pandas_result.shape}, SQL result shape: {sql_result.shape}"
-            )
+            # Compare pandas and SQL results - they must match EXACTLY
+            is_match, feedback = compare_dataframes(pandas_result, sql_result)
+            if not is_match:
+                raise ValueError(
+                    f"Claude's pandas and SQL solutions produce different results. This is a problem generation error.\n"
+                    f"Pandas solution: {pandas_solution}\n"
+                    f"SQL solution: {sql_solution}\n"
+                    f"Mismatch details: {feedback}\n"
+                    f"Pandas result shape: {pandas_result.shape}, SQL result shape: {sql_result.shape}"
+                )
 
-        # Use the pandas result as the expected output (they're identical)
-        expected_output = pandas_result.copy()
+            # Use the pandas result as the expected output (they're identical)
+            expected_output = pandas_result.copy()
 
         # Create and return Problem object
         return Problem(
@@ -606,7 +649,8 @@ def generate_problem(
             topic=problem_data["topic"],
             difficulty=problem_data["difficulty"],
             pandas_solution=pandas_solution,
-            sql_solution=sql_solution
+            sql_solution=sql_solution,
+            pandas_only=is_pandas_only
         )
 
     except ValueError as ve:

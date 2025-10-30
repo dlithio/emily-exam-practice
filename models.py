@@ -18,6 +18,7 @@ class Problem:
         difficulty: Optional difficulty level ("easy", "medium", "hard")
         pandas_solution: Optional reference solution using pandas (should assign to 'result' variable)
         sql_solution: Optional reference solution using SQL (complete SELECT query)
+        pandas_only: Whether this problem is pandas-only (e.g., pivot/melt operations)
     """
     input_tables: Dict[str, pd.DataFrame]
     question: str
@@ -26,6 +27,7 @@ class Problem:
     difficulty: Optional[str] = "easy"
     pandas_solution: Optional[str] = None
     sql_solution: Optional[str] = None
+    pandas_only: bool = False
 
     def __repr__(self) -> str:
         """Pretty print the problem structure."""
@@ -79,7 +81,8 @@ class Problem:
             'topic': self.topic,
             'difficulty': self.difficulty,
             'pandas_solution': self.pandas_solution,
-            'sql_solution': self.sql_solution
+            'sql_solution': self.sql_solution,
+            'pandas_only': self.pandas_only
         }
 
     @classmethod
@@ -122,7 +125,8 @@ class Problem:
             topic=json_dict['topic'],
             difficulty=json_dict.get('difficulty', 'easy'),
             pandas_solution=json_dict.get('pandas_solution'),
-            sql_solution=json_dict.get('sql_solution')
+            sql_solution=json_dict.get('sql_solution'),
+            pandas_only=json_dict.get('pandas_only', False)
         )
 
 
