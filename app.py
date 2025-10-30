@@ -123,6 +123,12 @@ sample_problem = Problem(
     difficulty="easy"
 )
 
+# Initialize session state
+if 'result_df' not in st.session_state:
+    st.session_state.result_df = None
+if 'error_message' not in st.session_state:
+    st.session_state.error_message = None
+
 # Main App Layout
 st.title("Pandas & SQL Practice")
 
@@ -160,28 +166,29 @@ user_code = st.text_area(
 # Run button
 run_button = st.button("Run Code", type="primary")
 
-# Result Section
-st.header("Result")
+# Handle code execution when button is clicked
 if run_button:
     if not user_code.strip():
-        st.warning("Please enter some code first!")
+        st.session_state.result_df = None
+        st.session_state.error_message = "Please enter some code first!"
     elif language == "Pandas":
         result_df, error = execute_pandas(user_code, sample_problem.input_tables)
-
-        if error:
-            st.error(error)
-        else:
-            st.success("Code executed successfully!")
-            st.subheader("Your Output:")
-            st.dataframe(result_df)
+        st.session_state.result_df = result_df
+        st.session_state.error_message = error
     else:  # SQL
         result_df, error = execute_sql(user_code, sample_problem.input_tables)
+        st.session_state.result_df = result_df
+        st.session_state.error_message = error
 
-        if error:
-            st.error(error)
-        else:
-            st.success("Code executed successfully!")
-            st.subheader("Your Output:")
-            st.dataframe(result_df)
+# Result Section
+st.header("Result")
+
+# Display results from session state
+if st.session_state.error_message:
+    st.error(st.session_state.error_message)
+elif st.session_state.result_df is not None:
+    st.success("Code executed successfully!")
+    st.subheader("Your Output:")
+    st.dataframe(st.session_state.result_df)
 else:
     st.write("Your results will appear here after running your code.")
