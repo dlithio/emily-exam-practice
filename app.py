@@ -1,6 +1,55 @@
 import streamlit as st
 import pandas as pd
+from typing import Tuple, Optional
 from models import Problem
+
+
+def execute_pandas(code: str, input_tables: dict[str, pd.DataFrame]) -> Tuple[Optional[pd.DataFrame], Optional[str]]:
+    """Execute user's pandas code safely and return the result.
+
+    Args:
+        code: User's pandas code as a string
+        input_tables: Dictionary of table names to DataFrames
+
+    Returns:
+        Tuple of (result_dataframe, error_message)
+        - If successful: (DataFrame, None)
+        - If error: (None, error_message_string)
+    """
+    try:
+        # Prepare a restricted namespace with input tables and pandas
+        namespace = {
+            'pd': pd,
+            '__builtins__': __builtins__,
+        }
+
+        # Add all input tables to the namespace as variables
+        for table_name, df in input_tables.items():
+            namespace[table_name] = df.copy()  # Use copy to prevent modification of original data
+
+        # Execute the user's code
+        exec(code, namespace)
+
+        # Check if 'result' variable was created
+        if 'result' not in namespace:
+            return None, "Error: Your code must assign the output to a variable named 'result'"
+
+        result = namespace['result']
+
+        # Verify result is a DataFrame
+        if not isinstance(result, pd.DataFrame):
+            return None, f"Error: Expected result to be a DataFrame, but got {type(result).__name__}"
+
+        return result, None
+
+    except SyntaxError as e:
+        return None, f"Syntax Error: {str(e)}"
+    except NameError as e:
+        return None, f"Name Error: {str(e)}\nMake sure you're using the correct table names and pandas syntax."
+    except KeyError as e:
+        return None, f"Key Error: {str(e)}\nCheck that column names are correct."
+    except Exception as e:
+        return None, f"Error: {type(e).__name__}: {str(e)}"
 
 
 def display_problem(problem: Problem) -> None:
@@ -86,6 +135,18 @@ run_button = st.button("Run Code", type="primary")
 # Result Section
 st.header("Result")
 if run_button:
-    st.info("Code execution will be implemented in the next step...")
+    if not user_code.strip():
+        st.warning("Please enter some code first!")
+    elif language == "Pandas":
+        result_df, error = execute_pandas(user_code, sample_problem.input_tables)
+
+        if error:
+            st.error(error)
+        else:
+            st.success("Code executed successfully!")
+            st.subheader("Your Output:")
+            st.dataframe(result_df)
+    else:
+        st.info("SQL execution will be implemented in step 3.3...")
 else:
     st.write("Your results will appear here after running your code.")
