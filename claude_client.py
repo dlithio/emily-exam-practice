@@ -227,8 +227,22 @@ Return your response as a JSON object with this EXACT structure:
     ]
   }},
   "topic": "{topic}",
-  "difficulty": "{difficulty}"
+  "difficulty": "{difficulty}",
+  "pandas_solution": "result = ...",
+  "sql_solution": "SELECT ..."
 }}
+
+REFERENCE SOLUTIONS REQUIREMENT:
+You MUST provide both a pandas solution and a SQL solution that produce the exact expected_output:
+- pandas_solution: Complete pandas code that assigns the final result to a variable named 'result'.
+  The input table names will be available as DataFrame variables.
+  Example: "result = employees[employees['salary'] > 70000]"
+- sql_solution: Complete SELECT query that works with standard SQL.
+  The input tables will be available as SQL tables with the same names.
+  Example: "SELECT * FROM employees WHERE salary > 70000"
+- Both solutions MUST produce exactly the expected_output DataFrame
+- Test your solutions mentally to ensure they work correctly
+- Make sure column names, types, and row order match the expected_output exactly
 
 IMPORTANT GUIDELINES:
 - Keep data small and realistic (real-world scenarios like employees, sales, products)
@@ -260,7 +274,9 @@ Example JSON format (for reference only - generate a NEW problem):
     ]
   }},
   "topic": "filter_rows",
-  "difficulty": "easy"
+  "difficulty": "easy",
+  "pandas_solution": "result = employees[employees['department'] == 'Engineering']",
+  "sql_solution": "SELECT * FROM employees WHERE department = 'Engineering'"
 }}
 
 Generate a NEW problem now (not the example above).
@@ -408,13 +424,19 @@ def generate_problem(topic: str, difficulty: str = "easy", use_cache: bool = Tru
         if expected_output.empty:
             raise ValueError("API response contains empty expected output. Please try again.")
 
+        # Extract optional solution fields
+        pandas_solution = problem_data.get("pandas_solution")
+        sql_solution = problem_data.get("sql_solution")
+
         # Create and return Problem object
         return Problem(
             input_tables=input_tables,
             question=problem_data["question"],
             expected_output=expected_output,
             topic=problem_data["topic"],
-            difficulty=problem_data["difficulty"]
+            difficulty=problem_data["difficulty"],
+            pandas_solution=pandas_solution,
+            sql_solution=sql_solution
         )
 
     except ValueError as ve:

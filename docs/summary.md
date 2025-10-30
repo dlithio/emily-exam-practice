@@ -58,7 +58,8 @@ This is a Streamlit-based educational application that generates pandas and SQL 
 **Purpose:** Core data model for practice problems
 
 **Classes:**
-- `Problem` (dataclass) - Contains input_tables (dict), question (str), expected_output (DataFrame), topic (str), difficulty (str)
+- `Problem` (dataclass) - Contains input_tables (dict), question (str), expected_output (DataFrame), topic (str), difficulty (str), pandas_solution (Optional[str]), sql_solution (Optional[str])
+- Solutions are Claude's reference implementations that produce the expected output
 
 ---
 
@@ -76,9 +77,10 @@ This is a Streamlit-based educational application that generates pandas and SQL 
 **Prompt Design:**
 - Plain English questions (no SQL/pandas terminology)
 - Easy = ONE operation only
-- JSON structured output
+- JSON structured output with pandas_solution and sql_solution fields
 - Must be solvable in both pandas AND SQL
 - Random dataset topic selection for variety (integrated in Step 8.2)
+- Reference solutions: pandas assigns to 'result', SQL is complete SELECT query
 
 **Dependencies:** `models.py` (Problem), `dataset_topics.py` (get_random_topic)
 
@@ -155,15 +157,16 @@ This is a Streamlit-based educational application that generates pandas and SQL 
 
 ## Development Progress
 
-**Completed:** Steps 1.1 through 8.2 (full basic app + topic library + random topic integration)
+**Completed:** Steps 1.1 through 8.3 (full basic app + topic library + random topic integration + reference solutions)
 
-**What's New in Step 8.2:**
-- Random dataset topic selection integrated into `claude_client.py`
-- Every generated problem now uses a different dataset domain for variety
-- Topics logged for debugging: `[DEBUG] Using dataset topic: {topic}`
+**What's New in Step 8.3:**
+- Problem class now includes `pandas_solution` and `sql_solution` fields
+- Claude generates reference implementations for both pandas and SQL
+- Solutions are validated to produce the expected output
+- `__repr__()` updated to show which solutions are available
 
 **Next Up (new-steps.md):**
-- Step 8.3-8.6: Solution verification and reference solutions
+- Step 8.4-8.6: Solution verification, UI for showing solutions, export/import
 - Step 9: Add "derived_column" skill
 - Step 10: Medium difficulty (2-3 skill combinations)
 - Step 11: Hard difficulty (3-4 skills + advanced topics like pivot/melt/cross_join)

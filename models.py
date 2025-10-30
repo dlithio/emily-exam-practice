@@ -15,25 +15,41 @@ class Problem:
         expected_output: DataFrame showing the correct answer
         topic: Category of the problem (e.g., "filter_rows", "group_by", "joins")
         difficulty: Optional difficulty level ("easy", "medium", "hard")
+        pandas_solution: Optional reference solution using pandas (should assign to 'result' variable)
+        sql_solution: Optional reference solution using SQL (complete SELECT query)
     """
     input_tables: Dict[str, pd.DataFrame]
     question: str
     expected_output: pd.DataFrame
     topic: str
     difficulty: Optional[str] = "easy"
+    pandas_solution: Optional[str] = None
+    sql_solution: Optional[str] = None
 
     def __repr__(self) -> str:
         """Pretty print the problem structure."""
         tables_info = ", ".join(f"{name}({len(df)} rows)" for name, df in self.input_tables.items())
-        return (
+        result = (
             f"Problem(\n"
             f"  topic='{self.topic}',\n"
             f"  difficulty='{self.difficulty}',\n"
             f"  tables=[{tables_info}],\n"
             f"  question='{self.question[:50]}...',\n"
-            f"  expected_output=({self.expected_output.shape[0]} rows, {self.expected_output.shape[1]} cols)\n"
-            f")"
+            f"  expected_output=({self.expected_output.shape[0]} rows, {self.expected_output.shape[1]} cols)"
         )
+
+        # Add solution information if present
+        if self.pandas_solution or self.sql_solution:
+            result += ",\n  solutions=["
+            solutions = []
+            if self.pandas_solution:
+                solutions.append("pandas")
+            if self.sql_solution:
+                solutions.append("SQL")
+            result += ", ".join(solutions) + "]"
+
+        result += "\n)"
+        return result
 
 
 if __name__ == "__main__":
