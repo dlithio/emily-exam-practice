@@ -308,16 +308,30 @@ def generate_problem(topic: str, difficulty: str = "easy", use_cache: bool = Tru
             cache_key = hash(f"{topic}_{difficulty}") % 1000
             response_text = _cached_generate_problem(topic, difficulty, cache_key)
         else:
-            client = get_client()
-            prompt = build_problem_generation_prompt(topic, difficulty)
-            response = client.messages.create(
-                model=DEFAULT_MODEL,
-                max_tokens=2000,
-                messages=[
-                    {"role": "user", "content": prompt}
-                ]
-            )
-            response_text = response.content[0].text
+            try:
+                client = get_client()
+                prompt = build_problem_generation_prompt(topic, difficulty)
+                response = client.messages.create(
+                    model=DEFAULT_MODEL,
+                    max_tokens=2000,
+                    messages=[
+                        {"role": "user", "content": prompt}
+                    ]
+                )
+                response_text = response.content[0].text
+            except Exception as api_error:
+                # Provide more specific error message for API failures
+                error_msg = str(api_error)
+                if "api_key" in error_msg.lower() or "authentication" in error_msg.lower():
+                    raise Exception("API authentication failed. Please check your ANTHROPIC_API_KEY.")
+                elif "timeout" in error_msg.lower():
+                    raise Exception("API request timed out. Please check your internet connection and try again.")
+                elif "rate_limit" in error_msg.lower():
+                    raise Exception("API rate limit exceeded. Please wait a moment and try again.")
+                elif "overloaded" in error_msg.lower():
+                    raise Exception("API is temporarily overloaded. Please try again in a moment.")
+                else:
+                    raise Exception(f"API request failed: {error_msg}")
 
         # Parse JSON response
         cleaned_response = strip_markdown_code_blocks(response_text)
@@ -326,15 +340,19 @@ def generate_problem(topic: str, difficulty: str = "easy", use_cache: bool = Tru
             problem_data = json.loads(cleaned_response)
         except json.JSONDecodeError as e:
             raise ValueError(
-                f"Failed to parse API response as JSON: {e}\n"
-                f"Raw response: {response_text[:200]}..."
+                f"API returned invalid JSON format. This may be a temporary issue. "
+                f"Error: {e}\n"
+                f"Response preview: {response_text[:200]}..."
             )
 
         # Validate required fields
         required_fields = ["input_tables", "question", "expected_output", "topic", "difficulty"]
         missing_fields = [field for field in required_fields if field not in problem_data]
         if missing_fields:
-            raise ValueError(f"API response missing required fields: {missing_fields}")
+            raise ValueError(
+                f"API response is missing required fields: {missing_fields}. "
+                f"This may be a temporary issue with the AI model. Please try again."
+            )
 
         # Convert JSON tables to DataFrames
         input_tables = {}
@@ -350,6 +368,14 @@ def generate_problem(topic: str, difficulty: str = "easy", use_cache: bool = Tru
         except Exception as e:
             raise ValueError(f"Failed to convert expected output to DataFrame: {e}")
 
+        # Validate that we have at least one input table
+        if not input_tables:
+            raise ValueError("API response contains no input tables. Please try again.")
+
+        # Validate that expected output has data
+        if expected_output.empty:
+            raise ValueError("API response contains empty expected output. Please try again.")
+
         # Create and return Problem object
         return Problem(
             input_tables=input_tables,
@@ -359,12 +385,13 @@ def generate_problem(topic: str, difficulty: str = "easy", use_cache: bool = Tru
             difficulty=problem_data["difficulty"]
         )
 
-    except ValueError:
+    except ValueError as ve:
         # Re-raise ValueError with original message
-        raise
+        raise ve
     except Exception as e:
         # Wrap other exceptions with more context
-        raise Exception(f"Failed to generate problem: {e}")
+        error_type = type(e).__name__
+        raise Exception(f"{error_type}: {str(e)}")
 
 
 if __name__ == "__main__":

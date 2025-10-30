@@ -3,6 +3,8 @@ import pandas as pd
 import sqlite3
 import traceback
 import random
+import signal
+from contextlib import contextmanager
 from typing import Tuple, Optional
 from models import Problem
 from claude_client import generate_problem
@@ -19,6 +21,42 @@ TOPICS = [
     "limit"
 ]
 
+# Execution timeout in seconds
+EXECUTION_TIMEOUT = 5
+
+
+class TimeoutError(Exception):
+    """Raised when code execution times out."""
+    pass
+
+
+@contextmanager
+def time_limit(seconds):
+    """
+    Context manager to limit execution time of code block.
+
+    Args:
+        seconds: Maximum number of seconds to allow execution
+
+    Raises:
+        TimeoutError: If execution exceeds time limit
+    """
+    def signal_handler(signum, frame):
+        raise TimeoutError(f"Code execution exceeded {seconds} second time limit")
+
+    # Set up signal handler (Unix/macOS only)
+    try:
+        signal.signal(signal.SIGALRM, signal_handler)
+        signal.alarm(seconds)
+        try:
+            yield
+        finally:
+            signal.alarm(0)  # Disable alarm
+    except AttributeError:
+        # On Windows, signal.SIGALRM doesn't exist - just yield without timeout
+        # In production, would use multiprocessing or other cross-platform solution
+        yield
+
 
 def execute_pandas(code: str, input_tables: dict[str, pd.DataFrame]) -> Tuple[Optional[pd.DataFrame], Optional[str]]:
     """Execute user's pandas code safely and return the result.
@@ -33,31 +71,34 @@ def execute_pandas(code: str, input_tables: dict[str, pd.DataFrame]) -> Tuple[Op
         - If error: (None, error_message_string)
     """
     try:
-        # Prepare a restricted namespace with input tables and pandas
-        namespace = {
-            'pd': pd,
-            '__builtins__': __builtins__,
-        }
+        with time_limit(EXECUTION_TIMEOUT):
+            # Prepare a restricted namespace with input tables and pandas
+            namespace = {
+                'pd': pd,
+                '__builtins__': __builtins__,
+            }
 
-        # Add all input tables to the namespace as variables
-        for table_name, df in input_tables.items():
-            namespace[table_name] = df.copy()  # Use copy to prevent modification of original data
+            # Add all input tables to the namespace as variables
+            for table_name, df in input_tables.items():
+                namespace[table_name] = df.copy()  # Use copy to prevent modification of original data
 
-        # Execute the user's code
-        exec(code, namespace)
+            # Execute the user's code
+            exec(code, namespace)
 
-        # Check if 'result' variable was created
-        if 'result' not in namespace:
-            return None, "Error: Your code must assign the output to a variable named 'result'"
+            # Check if 'result' variable was created
+            if 'result' not in namespace:
+                return None, "Error: Your code must assign the output to a variable named 'result'"
 
-        result = namespace['result']
+            result = namespace['result']
 
-        # Verify result is a DataFrame
-        if not isinstance(result, pd.DataFrame):
-            return None, f"Error: Expected result to be a DataFrame, but got {type(result).__name__}"
+            # Verify result is a DataFrame
+            if not isinstance(result, pd.DataFrame):
+                return None, f"Error: Expected result to be a DataFrame, but got {type(result).__name__}"
 
-        return result, None
+            return result, None
 
+    except TimeoutError as e:
+        return None, f"Timeout Error: {str(e)}\n\nYour code took too long to execute. Check for infinite loops or very slow operations."
     except Exception:
         return None, traceback.format_exc()
 
@@ -74,24 +115,32 @@ def execute_sql(query: str, input_tables: dict[str, pd.DataFrame]) -> Tuple[Opti
         - If successful: (DataFrame, None)
         - If error: (None, error_message_string)
     """
+    conn = None
     try:
-        # Create an in-memory SQLite database
-        conn = sqlite3.connect(':memory:')
+        with time_limit(EXECUTION_TIMEOUT):
+            # Create an in-memory SQLite database
+            conn = sqlite3.connect(':memory:')
 
-        # Load all input tables into the database
-        for table_name, df in input_tables.items():
-            df.to_sql(table_name, conn, index=False, if_exists='replace')
+            # Load all input tables into the database
+            for table_name, df in input_tables.items():
+                df.to_sql(table_name, conn, index=False, if_exists='replace')
 
-        # Execute the user's SQL query and fetch results as a DataFrame
-        result = pd.read_sql_query(query, conn)
+            # Execute the user's SQL query and fetch results as a DataFrame
+            result = pd.read_sql_query(query, conn)
 
-        # Close the connection
-        conn.close()
+            return result, None
 
-        return result, None
-
+    except TimeoutError as e:
+        return None, f"Timeout Error: {str(e)}\n\nYour SQL query took too long to execute. Check for infinite loops or very slow operations."
     except Exception:
         return None, traceback.format_exc()
+    finally:
+        # Always close the connection if it was opened
+        if conn is not None:
+            try:
+                conn.close()
+            except:
+                pass
 
 
 def compare_dataframes(user_df: any, expected_df: pd.DataFrame) -> Tuple[bool, str]:
@@ -235,8 +284,28 @@ if st.session_state.current_problem is None:
                 use_cache=True
             )
         except Exception as e:
-            st.error(f"Failed to generate problem: {e}")
-            st.error("Please check your ANTHROPIC_API_KEY is set correctly.")
+            st.error("⚠️ Failed to generate initial problem")
+            st.error(f"Error details: {str(e)}")
+
+            # Provide helpful troubleshooting information
+            with st.expander("Troubleshooting"):
+                st.markdown("""
+                **Common issues:**
+                1. **API Key**: Make sure your `ANTHROPIC_API_KEY` environment variable is set
+                2. **Network**: Check your internet connection
+                3. **API Status**: Visit https://status.anthropic.com to check if the API is operational
+
+                **To set your API key:**
+                ```bash
+                export ANTHROPIC_API_KEY="your-key-here"
+                ```
+
+                Or add it to `.streamlit/secrets.toml`:
+                ```toml
+                ANTHROPIC_API_KEY = "your-key-here"
+                ```
+                """)
+
             st.stop()
 
 # Main App Layout
@@ -256,14 +325,13 @@ st.markdown("""
 with st.sidebar:
     st.header("Problem Generator")
 
-    # Topic selector
+    # Topic selector - using key to bind directly to session state
     topic_options = ["Random"] + TOPICS
-    selected_topic = st.selectbox(
+    st.selectbox(
         "Select Topic:",
         options=topic_options,
-        index=topic_options.index(st.session_state.selected_topic) if st.session_state.selected_topic in topic_options else 0
+        key="selected_topic"  # This automatically binds to st.session_state.selected_topic
     )
-    st.session_state.selected_topic = selected_topic
 
     # New problem button
     if st.button("Generate New Problem", type="primary", use_container_width=True):
@@ -282,17 +350,33 @@ with st.sidebar:
             topic = st.session_state.selected_topic
 
         # Generate new problem
-        with st.spinner("Generating new problem..."):
+        # IMPORTANT: Don't reveal the topic in messages when "Random" is selected
+        # This prevents giving away hints about what skill is being tested
+        if st.session_state.selected_topic == "Random":
+            spinner_message = "Generating new problem..."
+            success_message = "✓ New problem generated!"
+        else:
+            spinner_message = f"Generating new {topic} problem..."
+            success_message = f"✓ New {topic} problem generated!"
+
+        with st.spinner(spinner_message):
             try:
-                st.session_state.current_problem = generate_problem(
+                new_problem = generate_problem(
                     topic=topic,
                     difficulty="easy",
                     use_cache=False  # Don't use cache for new problems
                 )
-                st.success("New problem generated!")
+                # Only update current problem if generation succeeded
+                st.session_state.current_problem = new_problem
+                st.success(success_message)
                 st.rerun()
             except Exception as e:
-                st.error(f"Failed to generate problem: {e}")
+                # Keep the previous problem - don't overwrite it
+                st.error("⚠️ Failed to generate new problem. Your current problem is still available.")
+                st.warning(f"Error details: {str(e)}")
+
+                # Provide retry guidance
+                st.info("💡 Try again or select a different topic. The API may be temporarily busy.")
 
 # Problem Section
 st.header("Problem")
@@ -307,6 +391,9 @@ language = st.radio(
     options=["Pandas", "SQL"],
     horizontal=True
 )
+
+# Helpful info about code execution
+st.caption(f"💡 Code execution has a {EXECUTION_TIMEOUT} second timeout limit")
 
 # Code input
 user_code = st.text_area(

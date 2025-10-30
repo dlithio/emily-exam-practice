@@ -19,12 +19,16 @@ This is a Streamlit-based educational application that generates pandas and SQL 
 
 **Key Features:**
 - Session state management for problems, user code, results, and feedback
-- Topic selection (filter_columns, filter_rows, aggregations, distinct, joins, order_by, limit)
+- Topic selection (filter_columns, filter_rows, aggregations, distinct, joins, order_by, limit) with "Random" option
 - Language selection (Pandas or SQL)
 - Side-by-side comparison of user output vs expected output
 - "Generate New Problem" button with topic selection
 - Custom CSS for monospaced code input
 - Comprehensive error handling with detailed feedback messages
+- Execution timeout protection (5 second limit for user code)
+- Robust API failure handling (keeps previous problem on error)
+- Loading spinners and informative error messages
+- Topic hidden to avoid giving away answers
 
 **Session State Variables:**
 - `current_problem` - Currently displayed problem
@@ -225,6 +229,23 @@ This is a Streamlit-based educational application that generates pandas and SQL 
 
 ---
 
+### `test_timeout.py`
+**Location:** Root directory
+**Purpose:** Tests execution timeout handling for both pandas and SQL (Step 6.3 verification)
+
+**Test Functions:**
+- `test_pandas_timeout()` - Verifies pandas code with infinite loop times out correctly after 5 seconds
+- `test_sql_timeout()` - Verifies SQL execution works correctly with timeout protection
+- `test_pandas_normal_execution()` - Ensures normal code still executes correctly with timeout protection
+
+**Verifications:**
+1. Timeout triggers after EXECUTION_TIMEOUT seconds (5s)
+2. Timeout error messages are clear and helpful
+3. Normal code execution is not affected by timeout protection
+4. All execution paths handle timeouts gracefully
+
+---
+
 ## File Dependencies
 
 ```
@@ -260,9 +281,9 @@ test files
 - ✅ Step 5.3: Problem generator implementation
 - ✅ Step 6.1: Connect generator to app
 - ✅ Step 6.2: Add "New Problem" button
+- ✅ Step 6.3: Handle edge cases (loading states, API failures, timeouts)
 
 ### Next Steps (from plan.md):
-- Step 6.3: Handle edge cases (loading states, API failures, timeouts)
 - Step 7.1: Add topic selector (sidebar with checkboxes)
 - Step 7.2: Add difficulty levels
 - Step 7.3: Add progress tracking (optional)
@@ -276,6 +297,25 @@ test files
 - Pandas: Uses `exec()` with restricted namespace (contains only pd, input tables, and builtins)
 - SQL: Uses in-memory SQLite database (`:memory:`)
 - Both return (result, error) tuple for safe error handling
+- **Timeout Protection**: 5 second execution limit using signal-based timeout (Unix/macOS)
+  - Prevents infinite loops and slow operations
+  - Graceful timeout error messages with helpful guidance
+  - Cross-platform timeout context manager with fallback for Windows
+
+### Error Handling & Robustness
+- **Code Execution Errors**:
+  - Timeout detection with user-friendly messages
+  - Full traceback for debugging syntax and runtime errors
+  - Validation of result type and presence
+- **API Failure Handling**:
+  - Keeps previous problem available when new problem generation fails
+  - Specific error messages for common API issues (auth, timeout, rate limit, overload)
+  - Helpful troubleshooting guidance with API key setup instructions
+  - Validates API responses for required fields and data integrity
+- **Loading States**:
+  - Spinners for initial problem generation and new problem requests
+  - Topic-specific loading messages (e.g., "Generating new filter_rows problem...")
+  - Success notifications when problems are generated
 
 ### Comparison Logic
 - Strict row order and column order matching
@@ -312,6 +352,7 @@ uv run python test_sql_execution.py
 uv run python test_comparison.py
 uv run python test_prompt_generation.py
 uv run python test_generate_problem.py
+uv run python test_timeout.py  # Takes ~5 seconds due to timeout test
 ```
 
 ### Environment Variables
