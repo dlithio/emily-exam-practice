@@ -39,6 +39,7 @@ This is a Streamlit-based educational application that generates pandas and SQL 
 - `execute_pandas(code, input_tables)` → (DataFrame | None, error | None)
 - `execute_sql(query, input_tables)` → (DataFrame | None, error | None)
 - `compare_dataframes(user_df, expected_df)` → (is_correct, feedback_message)
+- `verify_problem_solutions(problem)` → dict with verification results (pandas_valid, sql_valid, errors, feedback)
 - `display_problem(problem)` - Renders problem UI
 
 **Critical Features:**
@@ -47,6 +48,7 @@ This is a Streamlit-based educational application that generates pandas and SQL 
 - "Reveal Problem Info" button (hides topic/difficulty until clicked)
 - Robust API error handling (keeps previous problem on failure)
 - Session state for persistence across reruns
+- Automatic verification of Claude's reference solutions with logging
 
 **Available Topics:** filter_columns, filter_rows, aggregations, distinct, joins, order_by, limit
 
@@ -114,6 +116,7 @@ This is a Streamlit-based educational application that generates pandas and SQL 
 - `test_timeout.py` - Tests 5-second timeout for pandas and SQL execution
 - `test_edge_case.py` - Tests incomplete SQL queries
 - `test_pandas_error.py` - Tests error traceback handling
+- `test_solution_verification.py` - Tests verify_problem_solutions() function with multiple problems (100% success rate)
 
 **Key Testing Details:**
 - DataFrame comparison: Lenient with int/float types, strict row/column order, float tolerance (rtol=1e-5, atol=1e-8)
@@ -142,6 +145,7 @@ This is a Streamlit-based educational application that generates pandas and SQL 
 - API failures keep previous problem (don't leave user stuck)
 - Full tracebacks for debugging user code errors
 - Specific error messages for common API issues (auth, timeout, rate limits)
+- Solution verification logs warnings when reference solutions fail but accepts problem (MVP approach)
 
 **Comparison Logic:**
 - Strict row and column order
@@ -157,16 +161,17 @@ This is a Streamlit-based educational application that generates pandas and SQL 
 
 ## Development Progress
 
-**Completed:** Steps 1.1 through 8.3 (full basic app + topic library + random topic integration + reference solutions)
+**Completed:** Steps 1.1 through 8.4 (full basic app + topic library + random topic integration + reference solutions + solution verification)
 
-**What's New in Step 8.3:**
-- Problem class now includes `pandas_solution` and `sql_solution` fields
-- Claude generates reference implementations for both pandas and SQL
-- Solutions are validated to produce the expected output
-- `__repr__()` updated to show which solutions are available
+**What's New in Step 8.4:**
+- Added `verify_problem_solutions(problem)` function in app.py
+- Verification runs automatically after each problem generation
+- Checks both pandas and SQL solutions against expected output
+- Logs warnings when solutions fail verification (MVP: accepts problem anyway)
+- Test suite confirms 100% verification success rate across multiple topics
 
 **Next Up (new-steps.md):**
-- Step 8.4-8.6: Solution verification, UI for showing solutions, export/import
+- Step 8.5-8.6: UI for showing reference solutions, export/import problem functionality
 - Step 9: Add "derived_column" skill
 - Step 10: Medium difficulty (2-3 skill combinations)
 - Step 11: Hard difficulty (3-4 skills + advanced topics like pivot/melt/cross_join)

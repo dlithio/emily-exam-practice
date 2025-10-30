@@ -4,10 +4,15 @@ import sqlite3
 import traceback
 import random
 import signal
+import logging
 from contextlib import contextmanager
 from typing import Tuple, Optional
 from models import Problem
 from claude_client import generate_problem
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 # Available topics from the plan (foundational topics)
@@ -142,6 +147,65 @@ def execute_sql(query: str, input_tables: dict[str, pd.DataFrame]) -> Tuple[Opti
                 conn.close()
             except:
                 pass
+
+
+def verify_problem_solutions(problem: Problem) -> dict:
+    """Verify that Claude's reference solutions produce the expected output.
+
+    Args:
+        problem: Problem object containing pandas_solution, sql_solution, and expected_output
+
+    Returns:
+        Dictionary with verification results:
+        {
+            'pandas_valid': bool,
+            'sql_valid': bool,
+            'pandas_error': str or None,
+            'sql_error': str or None,
+            'pandas_feedback': str or None,
+            'sql_feedback': str or None
+        }
+    """
+    result = {
+        'pandas_valid': False,
+        'sql_valid': False,
+        'pandas_error': None,
+        'sql_error': None,
+        'pandas_feedback': None,
+        'sql_feedback': None
+    }
+
+    # Verify pandas solution
+    if problem.pandas_solution:
+        pandas_result, pandas_error = execute_pandas(
+            problem.pandas_solution,
+            problem.input_tables
+        )
+        result['pandas_error'] = pandas_error
+
+        if pandas_error is None and pandas_result is not None:
+            is_correct, feedback = compare_dataframes(pandas_result, problem.expected_output)
+            result['pandas_valid'] = is_correct
+            result['pandas_feedback'] = feedback
+        else:
+            result['pandas_feedback'] = "Pandas solution failed to execute"
+
+    # Verify SQL solution
+    if problem.sql_solution:
+        sql_result, sql_error = execute_sql(
+            problem.sql_solution,
+            problem.input_tables
+        )
+        result['sql_error'] = sql_error
+
+        if sql_error is None and sql_result is not None:
+            is_correct, feedback = compare_dataframes(sql_result, problem.expected_output)
+            result['sql_valid'] = is_correct
+            result['sql_feedback'] = feedback
+        else:
+            result['sql_feedback'] = "SQL solution failed to execute"
+
+    return result
 
 
 def compare_dataframes(user_df: any, expected_df: pd.DataFrame) -> Tuple[bool, str]:
@@ -281,11 +345,29 @@ if st.session_state.current_problem is None:
         try:
             # Generate a problem with a random foundational topic
             # Start with filter_rows as it's the first foundational topic
-            st.session_state.current_problem = generate_problem(
+            problem = generate_problem(
                 topic="filter_rows",
                 difficulty="easy",
                 use_cache=True
             )
+
+            # Verify the reference solutions
+            verification = verify_problem_solutions(problem)
+
+            # Log verification results
+            if not verification['pandas_valid']:
+                logger.warning(f"Pandas solution verification failed for initial problem")
+                logger.warning(f"Pandas error: {verification['pandas_error']}")
+                logger.warning(f"Pandas feedback: {verification['pandas_feedback']}")
+
+            if not verification['sql_valid']:
+                logger.warning(f"SQL solution verification failed for initial problem")
+                logger.warning(f"SQL error: {verification['sql_error']}")
+                logger.warning(f"SQL feedback: {verification['sql_feedback']}")
+
+            # Accept the problem even if verification fails (for MVP)
+            st.session_state.current_problem = problem
+
         except Exception as e:
             st.error("⚠️ Failed to generate initial problem")
             st.error(f"Error details: {str(e)}")
@@ -385,6 +467,26 @@ with st.sidebar:
                     difficulty="easy",
                     use_cache=False  # Don't use cache for new problems
                 )
+
+                # Verify the reference solutions
+                verification = verify_problem_solutions(new_problem)
+
+                # Log verification results
+                if not verification['pandas_valid']:
+                    logger.warning(f"Pandas solution verification failed for topic '{topic}'")
+                    logger.warning(f"Pandas error: {verification['pandas_error']}")
+                    logger.warning(f"Pandas feedback: {verification['pandas_feedback']}")
+                else:
+                    logger.info(f"Pandas solution verified successfully for topic '{topic}'")
+
+                if not verification['sql_valid']:
+                    logger.warning(f"SQL solution verification failed for topic '{topic}'")
+                    logger.warning(f"SQL error: {verification['sql_error']}")
+                    logger.warning(f"SQL feedback: {verification['sql_feedback']}")
+                else:
+                    logger.info(f"SQL solution verified successfully for topic '{topic}'")
+
+                # Accept the problem even if verification fails (for MVP)
                 # Only update current problem if generation succeeded
                 st.session_state.current_problem = new_problem
                 st.success(success_message)
