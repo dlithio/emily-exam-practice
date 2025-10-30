@@ -116,6 +116,25 @@ This is a Streamlit-based educational application that generates pandas and SQL 
 
 ---
 
+### `difficulty_manager.py` (skill composition logic)
+**Purpose:** Handles skill selection and CTE requirements for different difficulty levels
+
+**Key Functions:**
+- `select_skills_for_difficulty(difficulty, selected_topics)` → List[str]
+- `should_use_cte(difficulty, skills)` → (use_cte: bool, num_ctes: int)
+
+**Constants:**
+- `EASY_SKILLS` - List of 8 foundational topics (filter_columns, filter_rows, aggregations, distinct, joins, order_by, limit, derived_column)
+
+**Logic:**
+- Easy: 1 skill, no CTEs
+- Medium: 2-3 skills, 50% chance of 1 CTE
+- Hard: 3-4 skills, always uses CTEs (1-3 depending on skill count)
+
+**Integration:** Will be used by claude_client.py for medium/hard problem generation (Step 10.2+)
+
+---
+
 ## Test Files
 
 **Available Tests:**
@@ -141,8 +160,9 @@ This is a Streamlit-based educational application that generates pandas and SQL 
 
 **Import Chain:**
 - `app.py` → imports `models.py`, `claude_client.py`
-- `claude_client.py` → imports `models.py`, `dataset_topics.py`
+- `claude_client.py` → imports `models.py`, `dataset_topics.py` (will import `difficulty_manager.py` in Step 10.2)
 - `dataset_topics.py` → standalone library (provides topics)
+- `difficulty_manager.py` → standalone library (provides skill selection logic)
 - Test files → import from `app.py` and `claude_client.py`
 
 ---
@@ -174,7 +194,22 @@ This is a Streamlit-based educational application that generates pandas and SQL 
 
 ## Development Progress
 
-**Completed:** Steps 1.1 through 9.3 (full basic app + topic library + random topic integration + reference solutions + solution verification + reference solutions UI + export/import functionality + derived_column topic with all subtypes fully tested)
+**Completed:** Steps 1.1 through 10.1 (full basic app + topic library + random topic integration + reference solutions + solution verification + reference solutions UI + export/import functionality + derived_column topic with all subtypes fully tested + skill composition logic for medium/hard difficulties)
+
+**What's New in Step 10.1:**
+- Created `difficulty_manager.py` with skill composition logic
+- Added `EASY_SKILLS` constant (list of 8 foundational topics)
+- Implemented `select_skills_for_difficulty(difficulty, selected_topics)` function:
+  - Easy: Returns 1 skill
+  - Medium: Returns 2-3 skills
+  - Hard: Returns 3-4 skills
+  - Respects user-selected topics when provided
+- Implemented `should_use_cte(difficulty, skills)` function:
+  - Easy: Never uses CTEs (False, 0)
+  - Medium: 50% chance of 1 CTE
+  - Hard: Always uses CTEs (1-3 based on number of skills)
+- Tested all functions with multiple samples - working correctly
+- Module ready for integration in claude_client.py (Step 10.2)
 
 **What's New in Step 8.6:**
 - Added "Export Problem" button in sidebar "Save & Share" section
@@ -217,7 +252,9 @@ This is a Streamlit-based educational application that generates pandas and SQL 
 - All three subtypes generate valid problems solvable in both pandas and SQL
 
 **Next Up (new-steps.md):**
-- Step 10: Medium difficulty (2-3 skill combinations)
+- Step 10.2: Update problem generation for multi-skill (integrate difficulty_manager with Claude API)
+- Step 10.3: Update UI for difficulty selection (add radio buttons)
+- Step 10.4: Test medium difficulty problems
 - Step 11: Hard difficulty (3-4 skills + advanced topics like pivot/melt/cross_join)
 
 ---
