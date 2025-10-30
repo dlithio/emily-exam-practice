@@ -49,14 +49,43 @@ sample_problem = Problem(
 # Main App Layout
 st.title("Pandas & SQL Practice")
 
+# Custom CSS for monospaced code input
+st.markdown("""
+    <style>
+    textarea {
+        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'source-code-pro', monospace !important;
+        font-size: 14px !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
 # Problem Section
 st.header("Problem")
 display_problem(sample_problem)
 
 # Your Code Section
 st.header("Your Code")
-st.write("Code editor will appear here...")
+
+# Language selection
+language = st.radio(
+    "Select language:",
+    options=["Pandas", "SQL"],
+    horizontal=True
+)
+
+# Code input
+user_code = st.text_area(
+    "Enter your code:",
+    height=200,
+    placeholder="# Write your Pandas code here..." if language == "Pandas" else "-- Write your SQL query here..."
+)
+
+# Run button
+run_button = st.button("Run Code", type="primary")
 
 # Result Section
 st.header("Result")
-st.write("Your results will appear here...")
+if run_button:
+    st.info("Code execution will be implemented in the next step...")
+else:
+    st.write("Your results will appear here after running your code.")
