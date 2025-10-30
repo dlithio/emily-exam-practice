@@ -67,7 +67,8 @@ This is a Streamlit-based educational application that generates pandas and SQL 
 
 **Key Functions:**
 - `generate_problem(topic, difficulty, use_cache)` → Problem
-- `build_problem_generation_prompt(topic, difficulty)` → str
+- `build_problem_generation_prompt(topic, difficulty, dataset_topic)` → str
+- `select_random_topic()` → str
 - Helper functions: get_api_key(), get_client(), strip_markdown_code_blocks()
 
 **Model:** `claude-sonnet-4-5-20250929`
@@ -77,8 +78,9 @@ This is a Streamlit-based educational application that generates pandas and SQL 
 - Easy = ONE operation only
 - JSON structured output
 - Must be solvable in both pandas AND SQL
+- Random dataset topic selection for variety (integrated in Step 8.2)
 
-**Dependencies:** `models.py` (Problem)
+**Dependencies:** `models.py` (Problem), `dataset_topics.py` (get_random_topic)
 
 ---
 
@@ -90,7 +92,7 @@ This is a Streamlit-based educational application that generates pandas and SQL 
 - `get_random_topic()` - Returns random topic
 - Topics are 1-2 word domains (e.g., "library", "hospital") giving Claude flexibility
 
-**Note:** Not yet integrated into problem generation (pending Step 8.2)
+**Integration:** Fully integrated in Step 8.2 - every problem now uses a random dataset topic
 
 ---
 
@@ -121,8 +123,8 @@ This is a Streamlit-based educational application that generates pandas and SQL 
 
 **Import Chain:**
 - `app.py` → imports `models.py`, `claude_client.py`
-- `claude_client.py` → imports `models.py`
-- `dataset_topics.py` → standalone (not yet integrated)
+- `claude_client.py` → imports `models.py`, `dataset_topics.py`
+- `dataset_topics.py` → standalone library (provides topics)
 - Test files → import from `app.py` and `claude_client.py`
 
 ---
@@ -153,10 +155,14 @@ This is a Streamlit-based educational application that generates pandas and SQL 
 
 ## Development Progress
 
-**Completed:** Steps 1.1 through 8.1 (full basic app + topic library)
+**Completed:** Steps 1.1 through 8.2 (full basic app + topic library + random topic integration)
+
+**What's New in Step 8.2:**
+- Random dataset topic selection integrated into `claude_client.py`
+- Every generated problem now uses a different dataset domain for variety
+- Topics logged for debugging: `[DEBUG] Using dataset topic: {topic}`
 
 **Next Up (new-steps.md):**
-- Step 8.2: Integrate dataset_topics.py into problem generation
 - Step 8.3-8.6: Solution verification and reference solutions
 - Step 9: Add "derived_column" skill
 - Step 10: Medium difficulty (2-3 skill combinations)

@@ -3,11 +3,13 @@ Claude API client for generating practice problems.
 """
 import os
 import json
+import random
 from typing import Optional
 from functools import lru_cache
 from anthropic import Anthropic
 import pandas as pd
 from models import Problem
+from dataset_topics import get_random_topic
 
 # Default model for problem generation
 # Update this to the latest available model from https://docs.anthropic.com/en/docs/models-overview
@@ -105,13 +107,24 @@ def strip_markdown_code_blocks(text: str) -> str:
     return text.strip()
 
 
-def build_problem_generation_prompt(topic: str, difficulty: str = "easy") -> str:
+def select_random_topic() -> str:
+    """
+    Select a random dataset topic for problem generation.
+
+    Returns:
+        str: A random dataset topic from the library
+    """
+    return get_random_topic()
+
+
+def build_problem_generation_prompt(topic: str, difficulty: str = "easy", dataset_topic: Optional[str] = None) -> str:
     """
     Build a prompt that instructs Claude to generate a practice problem.
 
     Args:
         topic: The skill to focus on (e.g., "filter_rows", "group_by", "joins")
         difficulty: Problem difficulty ("easy", "medium", "hard")
+        dataset_topic: Optional dataset domain to use (e.g., "library", "hospital", "movies")
 
     Returns:
         str: Formatted prompt for Claude
@@ -139,8 +152,22 @@ def build_problem_generation_prompt(topic: str, difficulty: str = "easy") -> str
 
     difficulty_guide = difficulty_guidelines.get(difficulty, difficulty_guidelines["easy"])
 
-    prompt = f"""Generate a pandas/SQL practice problem focused on {topic_desc}.
+    # Add dataset topic instruction if provided
+    dataset_instruction = ""
+    if dataset_topic:
+        dataset_instruction = f"""
+DATASET DOMAIN: {dataset_topic}
+Create your problem using the "{dataset_topic}" domain. Generate appropriate table names,
+column names, and data that fit naturally with this domain. For example:
+- If the domain is "library", you might create tables like "books", "members", "checkouts"
+- If the domain is "hospital", you might create tables like "patients", "doctors", "appointments"
+- If the domain is "movies", you might create tables like "films", "directors", "ratings"
 
+Use your creativity to design tables that make sense for this domain and the skill being tested.
+"""
+
+    prompt = f"""Generate a pandas/SQL practice problem focused on {topic_desc}.
+{dataset_instruction}
 REQUIREMENTS:
 1. Create 1-2 small DataFrames as input tables with realistic column names and data
 2. Write a clear word problem describing what the user should do
@@ -259,20 +286,21 @@ def _json_to_dataframe(json_table: dict) -> pd.DataFrame:
 
 
 @lru_cache(maxsize=32)
-def _cached_generate_problem(topic: str, difficulty: str, cache_key: int) -> str:
+def _cached_generate_problem(topic: str, difficulty: str, dataset_topic: str, cache_key: int) -> str:
     """
     Cached version of API call to avoid regenerating during development.
 
     Args:
         topic: Topic for the problem
         difficulty: Difficulty level
+        dataset_topic: Dataset domain for the problem
         cache_key: Arbitrary key to control cache invalidation
 
     Returns:
         str: Raw JSON response from API
     """
     client = get_client()
-    prompt = build_problem_generation_prompt(topic, difficulty)
+    prompt = build_problem_generation_prompt(topic, difficulty, dataset_topic)
 
     response = client.messages.create(
         model=DEFAULT_MODEL,
@@ -302,15 +330,19 @@ def generate_problem(topic: str, difficulty: str = "easy", use_cache: bool = Tru
         Exception: If API call fails
     """
     try:
+        # Select random dataset topic for variety
+        dataset_topic = select_random_topic()
+        print(f"[DEBUG] Using dataset topic: {dataset_topic}")
+
         # Call API (with or without cache)
         if use_cache:
-            # Using hash of topic+difficulty as cache key for reproducibility
-            cache_key = hash(f"{topic}_{difficulty}") % 1000
-            response_text = _cached_generate_problem(topic, difficulty, cache_key)
+            # Using hash of topic+difficulty+dataset_topic as cache key for reproducibility
+            cache_key = hash(f"{topic}_{difficulty}_{dataset_topic}") % 1000
+            response_text = _cached_generate_problem(topic, difficulty, dataset_topic, cache_key)
         else:
             try:
                 client = get_client()
-                prompt = build_problem_generation_prompt(topic, difficulty)
+                prompt = build_problem_generation_prompt(topic, difficulty, dataset_topic)
                 response = client.messages.create(
                     model=DEFAULT_MODEL,
                     max_tokens=2000,
