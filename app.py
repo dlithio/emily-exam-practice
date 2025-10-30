@@ -219,6 +219,12 @@ if 'result_df' not in st.session_state:
     st.session_state.result_df = None
 if 'error_message' not in st.session_state:
     st.session_state.error_message = None
+if 'is_correct' not in st.session_state:
+    st.session_state.is_correct = None
+if 'feedback_message' not in st.session_state:
+    st.session_state.feedback_message = None
+if 'show_expected' not in st.session_state:
+    st.session_state.show_expected = False
 
 # Main App Layout
 st.title("Pandas & SQL Practice")
@@ -259,17 +265,40 @@ run_button = st.button("Run Code", type="primary")
 
 # Handle code execution when button is clicked
 if run_button:
+    # Reset show_expected flag when running new code
+    st.session_state.show_expected = False
+
     if not user_code.strip():
         st.session_state.result_df = None
         st.session_state.error_message = "Please enter some code first!"
+        st.session_state.is_correct = None
+        st.session_state.feedback_message = None
     elif language == "Pandas":
         result_df, error = execute_pandas(user_code, sample_problem.input_tables)
         st.session_state.result_df = result_df
         st.session_state.error_message = error
+
+        # If execution was successful, compare with expected output
+        if error is None and result_df is not None:
+            is_correct, feedback = compare_dataframes(result_df, sample_problem.expected_output)
+            st.session_state.is_correct = is_correct
+            st.session_state.feedback_message = feedback
+        else:
+            st.session_state.is_correct = None
+            st.session_state.feedback_message = None
     else:  # SQL
         result_df, error = execute_sql(user_code, sample_problem.input_tables)
         st.session_state.result_df = result_df
         st.session_state.error_message = error
+
+        # If execution was successful, compare with expected output
+        if error is None and result_df is not None:
+            is_correct, feedback = compare_dataframes(result_df, sample_problem.expected_output)
+            st.session_state.is_correct = is_correct
+            st.session_state.feedback_message = feedback
+        else:
+            st.session_state.is_correct = None
+            st.session_state.feedback_message = None
 
 # Result Section
 st.header("Result")
@@ -278,8 +307,31 @@ st.header("Result")
 if st.session_state.error_message:
     st.error(st.session_state.error_message)
 elif st.session_state.result_df is not None:
-    st.success("Code executed successfully!")
-    st.subheader("Your Output:")
-    st.dataframe(st.session_state.result_df)
+    # Display comparison feedback
+    if st.session_state.is_correct is True:
+        st.success(st.session_state.feedback_message)
+        # Show user's output
+        st.subheader("Your Output:")
+        st.dataframe(st.session_state.result_df)
+    elif st.session_state.is_correct is False:
+        st.error(st.session_state.feedback_message)
+
+        # Show user's output and expected output side-by-side
+        col1, col2 = st.columns(2)
+        with col1:
+            st.subheader("Your Output:")
+            st.dataframe(st.session_state.result_df)
+        with col2:
+            st.subheader("Expected Output:")
+            if st.session_state.show_expected:
+                st.dataframe(sample_problem.expected_output)
+            else:
+                if st.button("Show Expected Output"):
+                    st.session_state.show_expected = True
+                    st.rerun()
+    else:
+        # Execution successful but no comparison result (shouldn't happen)
+        st.subheader("Your Output:")
+        st.dataframe(st.session_state.result_df)
 else:
     st.write("Your results will appear here after running your code.")
