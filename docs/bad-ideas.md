@@ -1,0 +1,13 @@
+* Get more variety in datasets for easy problems. Instead of having claude generate data, use package detailed in docs/ucimlrepo-README.md. Call `list_available_datasets()` and have python randomly pick one. Have python compute summary statistics about dataset (e.g. schema, num unique values in each column, num rows, num nulls). Pass this info to claude and have claude return a problem using that dataset. Also have claude tell us which columns should be included in the problem (not necessary to use all columns). Also see docs/ssl-fix.md for how to use this package. Anytime a dataset is fetched, we should immediately save it into a cache of some sort (just a folder that will persist across sessions and is not versioned). When a dataset is randomly selected, we should first check if it is in the cache and use it if it's there - if it's not there, then we can download it (and persist it). I'm not sure cache is the right word for what we're doing here since we want the storage to be permanent.
+* If we choose to do a date derivation, we'll probably need to add a random date column to the sample dataset since I don't think there are any dates there. Build in a flow to allow this (saved datasets should not have date - but we can randomly add it on after it's loaded and then the desired result dataset should be computed after this random date column is added)
+
+* TODO: How do we test joins using the uci data. Maybe have it create a small table to join to? Maybe use the example datasets from below?
+* TODO: Claude should add a column to the UCI dataset to indicate the granularity (e.g. Person_ID if the table is person level and does not have a similar ID already). It should always display this ID.
+* TODO: Examine what info is available about each UCI dataset from the python package that should be included in the summary. There is some great info on the website, and I'm guessing that can be returned from the python package in some way.
+* TODO: Consider not using UCIrvine data and just select from random topics instead.
+
+* Consider using some example datasets for the hard problems. Claude delivers solution as query and then we automatically compute the result that will be expected and used to compare users result dataset (we do not compare the user's query to real query). Maybe enforced randomization about which database to use 
+  * https://github.com/lerocha/chinook-database/releases
+  * https://github.com/lerocha/netflixdb/releases/tag/v1.0.27
+  * https://github.com/jpwhite3/northwind-SQLite3/tree/main?tab=readme-ov-file#northwind-sqlite3
+  * https://github.com/nuitsjp/AdventureWorks-for-SQLite/releases/tag/Release-1_0_0 
