@@ -22,6 +22,44 @@ EASY_SKILLS = [
 ]
 
 
+# Advanced topics (for hard difficulty only)
+ADVANCED_TOPICS = [
+    "datatypes",     # Converting and casting datatypes
+    "cross_join",    # Cross join operations (can be combined with other skills)
+    "pivot",         # Wide to long format (pandas only)
+    "melt"           # Long to wide format (pandas only)
+]
+
+
+# Descriptions for advanced topics
+ADVANCED_TOPIC_DESCRIPTIONS = {
+    "datatypes": {
+        "name": "Datatype Conversion",
+        "description": "Convert column datatypes (e.g., string to number, number to string)",
+        "can_combine": True,
+        "pandas_only": False
+    },
+    "cross_join": {
+        "name": "Cross Join",
+        "description": "Combine every row from one table with every row from another",
+        "can_combine": True,  # Should usually be combined with other operations
+        "pandas_only": False
+    },
+    "pivot": {
+        "name": "Pivot (Wide to Long)",
+        "description": "Transform data from wide format to long format (pandas only)",
+        "can_combine": False,
+        "pandas_only": True
+    },
+    "melt": {
+        "name": "Melt (Long to Wide)",
+        "description": "Transform data from long format to wide format (pandas only)",
+        "can_combine": False,
+        "pandas_only": True
+    }
+}
+
+
 def select_skills_for_difficulty(difficulty: str, selected_topics: List[str]) -> List[str]:
     """
     Selects skills to combine based on difficulty level.
@@ -62,11 +100,36 @@ def select_skills_for_difficulty(difficulty: str, selected_topics: List[str]) ->
         return random.sample(available_skills, num_skills)
 
     elif difficulty == "hard":
-        # Hard: 3-4 skills
-        num_skills = random.choice([3, 4])
-        # Ensure we don't try to sample more skills than available
-        num_skills = min(num_skills, len(available_skills))
-        return random.sample(available_skills, num_skills)
+        # Hard: Use advanced topics with specific probabilities
+        # 20% chance: pivot or melt (standalone, pandas-only)
+        # 20% chance: datatypes (standalone advanced topic)
+        # 30% chance: cross_join combined with 2-3 easy skills
+        # 30% chance: 3-4 easy skills (no advanced topics)
+
+        rand = random.random()
+
+        if rand < 0.20:
+            # 20% chance: Use pivot or melt as standalone (pandas-only)
+            return [random.choice(["pivot", "melt"])]
+
+        elif rand < 0.40:
+            # 20% chance: Use datatypes as standalone
+            return ["datatypes"]
+
+        elif rand < 0.70:
+            # 30% chance: Include cross_join with 2-3 easy skills
+            # Select 2-3 easy skills and add cross_join
+            num_easy_skills = random.choice([2, 3])
+            num_easy_skills = min(num_easy_skills, len(available_skills))
+            skills = random.sample(available_skills, num_easy_skills)
+            skills.append("cross_join")
+            return skills
+
+        else:
+            # 30% chance: Use 3-4 easy skills (no advanced topics)
+            num_skills = random.choice([3, 4])
+            num_skills = min(num_skills, len(available_skills))
+            return random.sample(available_skills, num_skills)
 
     else:
         # Default to easy if unknown difficulty

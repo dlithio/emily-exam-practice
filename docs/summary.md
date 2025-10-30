@@ -128,7 +128,17 @@ Streamlit educational app that generates pandas/SQL practice problems on-the-fly
 - `select_skills_for_difficulty(difficulty, selected_topics)` → List[str]
 - `should_use_cte(difficulty, skills)` → (use_cte, num_ctes)
 
-**Logic:** Easy (1 skill, no CTEs), Medium (2-3 skills, 50% CTE), Hard (3-4 skills, 1-3 CTEs)
+**Logic:**
+- Easy: 1 skill, no CTEs
+- Medium: 2-3 skills, 50% CTE
+- Hard: Advanced topic handling with probabilities:
+  - 20% chance: pivot/melt (standalone, pandas-only)
+  - 20% chance: datatypes (standalone)
+  - 30% chance: cross_join + 2-3 easy skills
+  - 30% chance: 3-4 easy skills
+  - Always uses 1-3 CTEs
+
+**Advanced Topics:** datatypes, cross_join, pivot, melt
 
 ---
 
@@ -177,21 +187,24 @@ Streamlit educational app that generates pandas/SQL practice problems on-the-fly
 
 ## Development Progress
 
-**Completed Steps:** 1.1 through 10.4
+**Completed Steps:** 1.1 through 11.1
 
 **Current State:**
 - ✅ Full basic app with execution and comparison
 - ✅ Claude API integration with quality assurance (solutions verified before accepting problem)
 - ✅ 100-topic dataset library for variety
 - ✅ 8 foundational skills including derived_column (arithmetic, conditional, date subtypes)
-- ✅ Difficulty levels: Easy (1 skill), Medium (2-3 skills), Hard (3-4 skills)
+- ✅ Difficulty levels: Easy (1 skill), Medium (2-3 skills), Hard (advanced topics + multi-skill)
 - ✅ CTE requirements: Medium (50% chance), Hard (1-3 CTEs)
 - ✅ Reference solutions UI, export/import functionality
 - ✅ Shared execution module (`execution.py`) prevents circular imports
 - ✅ Medium difficulty tested end-to-end (`test_medium_problems.py`)
+- ✅ Advanced topics for hard problems: datatypes, cross_join, pivot, melt
 
 **Next Up (new-steps.md):**
-- Step 11: Hard difficulty with advanced topics (pivot/melt/cross_join)
+- Step 11.2: Implement CTE requirements for hard problems
+- Step 11.3: Handle pandas-only problems (pivot/melt)
+- Step 11.4: Test hard difficulty problems
 
 ---
 
