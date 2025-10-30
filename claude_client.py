@@ -4,12 +4,13 @@ Claude API client for generating practice problems.
 import os
 import json
 import random
-from typing import Optional
+from typing import Optional, List
 from functools import lru_cache
 from anthropic import Anthropic
 import pandas as pd
 from models import Problem
 from dataset_topics import get_random_topic
+from difficulty_manager import select_skills_for_difficulty, should_use_cte
 
 # Default model for problem generation
 # Update this to the latest available model from https://docs.anthropic.com/en/docs/models-overview
@@ -117,14 +118,22 @@ def select_random_topic() -> str:
     return get_random_topic()
 
 
-def build_problem_generation_prompt(topic: str, difficulty: str = "easy", dataset_topic: Optional[str] = None) -> str:
+def build_problem_generation_prompt(
+    skills: List[str],
+    difficulty: str = "easy",
+    dataset_topic: Optional[str] = None,
+    use_cte: bool = False,
+    num_ctes: int = 0
+) -> str:
     """
     Build a prompt that instructs Claude to generate a practice problem.
 
     Args:
-        topic: The skill to focus on (e.g., "filter_rows", "group_by", "joins")
+        skills: List of skills to focus on (e.g., ["filter_rows", "aggregations"])
         difficulty: Problem difficulty ("easy", "medium", "hard")
         dataset_topic: Optional dataset domain to use (e.g., "library", "hospital", "movies")
+        use_cte: Whether to require CTEs in SQL solution
+        num_ctes: Number of CTEs to require (if use_cte is True)
 
     Returns:
         str: Formatted prompt for Claude
@@ -142,7 +151,15 @@ def build_problem_generation_prompt(topic: str, difficulty: str = "easy", datase
         "derived_column": "creating a new column based on existing column values",
     }
 
-    topic_desc = topic_descriptions.get(topic, topic)
+    # Build skill descriptions
+    if len(skills) == 1:
+        topic_desc = topic_descriptions.get(skills[0], skills[0])
+        skills_focus = f"TOPIC FOCUS: {skills[0]}\n{topic_desc}"
+    else:
+        # Multiple skills
+        skill_list = "\n".join([f"  - {skill}: {topic_descriptions.get(skill, skill)}" for skill in skills])
+        skills_focus = f"SKILLS TO COMBINE: {len(skills)} skills\n{skill_list}"
+        topic_desc = f"combining multiple operations: {', '.join(skills)}"
 
     # Difficulty guidelines
     difficulty_guidelines = {
@@ -169,7 +186,7 @@ Use your creativity to design tables that make sense for this domain and the ski
 
     # Add special instructions for derived_column topic
     derived_column_instruction = ""
-    if topic == "derived_column":
+    if "derived_column" in skills:
         # Select subtypes based on difficulty
         # Easy problems: only Arithmetic or Conditional (no dates - they require pd.to_datetime conversion)
         # Medium/Hard problems: can include Date subtype
@@ -195,8 +212,72 @@ The expected output should include the new column.
 Make sure the problem is solvable in both pandas and SQL.
 """
 
+    # Add multi-skill combination guidance
+    multi_skill_instruction = ""
+    if len(skills) > 1:
+        multi_skill_instruction = f"""
+MULTI-SKILL REQUIREMENT:
+Your problem must naturally require ALL {len(skills)} of these skills to solve efficiently:
+{skill_list}
+
+Design the problem so that all skills are needed in a logical, realistic way. Some natural combinations:
+- derived_column + filter_rows: Filter based on the derived column's value
+- derived_column + aggregations: Aggregate using the derived column
+- joins + filter_rows: Filter the data before OR after joining (or both)
+- joins + aggregations: Calculate aggregates on the joined data
+- filter_rows + aggregations: Filter first, then aggregate the filtered results
+- aggregations + order_by: Sort the aggregated results
+- Any skill + limit: Show only top N results after other operations
+
+The user should need to apply all {len(skills)} skills to arrive at the correct answer.
+"""
+
+    # Add CTE requirement for SQL solutions
+    cte_instruction = ""
+    if use_cte and num_ctes > 0:
+        cte_instruction = f"""
+SQL CTE REQUIREMENT:
+Your SQL solution MUST use Common Table Expressions (CTEs) to break the problem into logical steps.
+- Require at least {num_ctes} CTE{"s" if num_ctes > 1 else ""} in the SQL solution
+- Each CTE should represent a meaningful intermediate step
+- CTEs help organize complex queries into readable, maintainable parts
+- Use WITH clause syntax: WITH cte_name AS (SELECT ...), another_cte AS (SELECT ...) SELECT * FROM ...
+
+Example structure for {num_ctes} CTE{"s" if num_ctes > 1 else ""}:
+"""
+        if num_ctes == 1:
+            cte_instruction += """
+WITH filtered_data AS (
+    SELECT ... FROM table WHERE ...
+)
+SELECT ... FROM filtered_data
+"""
+        elif num_ctes == 2:
+            cte_instruction += """
+WITH filtered_data AS (
+    SELECT ... FROM table WHERE ...
+),
+aggregated_data AS (
+    SELECT ... FROM filtered_data GROUP BY ...
+)
+SELECT ... FROM aggregated_data
+"""
+        else:  # 3+ CTEs
+            cte_instruction += """
+WITH step1 AS (
+    SELECT ... FROM table WHERE ...
+),
+step2 AS (
+    SELECT ... FROM step1 JOIN another_table ...
+),
+step3 AS (
+    SELECT ... FROM step2 GROUP BY ...
+)
+SELECT ... FROM step3 ORDER BY ...
+"""
+
     prompt = f"""Generate a pandas/SQL practice problem focused on {topic_desc}.
-{dataset_instruction}{derived_column_instruction}
+{dataset_instruction}{derived_column_instruction}{multi_skill_instruction}{cte_instruction}
 REQUIREMENTS:
 1. Create 1-2 small DataFrames as input tables with realistic column names and data
 2. Write a clear word problem describing what the user should do
@@ -204,8 +285,7 @@ REQUIREMENTS:
 4. Ensure the problem can be solved in BOTH pandas AND SQL
 5. Difficulty: {difficulty} - {difficulty_guide}
 
-TOPIC FOCUS: {topic}
-{topic_desc}
+{skills_focus}
 
 CRITICAL REQUIREMENT - PLAIN ENGLISH ONLY:
 - Write the question in PLAIN ENGLISH that anyone could understand
@@ -255,7 +335,7 @@ Return your response as a JSON object with this EXACT structure:
       [val1, val2, ...]
     ]
   }},
-  "topic": "{topic}",
+  "topic": "{skills[0] if len(skills) == 1 else 'multi_skill'}",
   "difficulty": "{difficulty}",
   "pandas_solution": "result = ...",
   "sql_solution": "SELECT ..."
@@ -331,21 +411,31 @@ def _json_to_dataframe(json_table: dict) -> pd.DataFrame:
 
 
 @lru_cache(maxsize=32)
-def _cached_generate_problem(topic: str, difficulty: str, dataset_topic: str, cache_key: int) -> str:
+def _cached_generate_problem(
+    skills_tuple: tuple,
+    difficulty: str,
+    dataset_topic: str,
+    use_cte: bool,
+    num_ctes: int,
+    cache_key: int
+) -> str:
     """
     Cached version of API call to avoid regenerating during development.
 
     Args:
-        topic: Topic for the problem
+        skills_tuple: Tuple of skills for the problem (tuple for hashability)
         difficulty: Difficulty level
         dataset_topic: Dataset domain for the problem
+        use_cte: Whether to require CTEs in SQL solution
+        num_ctes: Number of CTEs to require
         cache_key: Arbitrary key to control cache invalidation
 
     Returns:
         str: Raw JSON response from API
     """
     client = get_client()
-    prompt = build_problem_generation_prompt(topic, difficulty, dataset_topic)
+    skills = list(skills_tuple)  # Convert back to list
+    prompt = build_problem_generation_prompt(skills, difficulty, dataset_topic, use_cte, num_ctes)
 
     response = client.messages.create(
         model=DEFAULT_MODEL,
@@ -358,13 +448,19 @@ def _cached_generate_problem(topic: str, difficulty: str, dataset_topic: str, ca
     return response.content[0].text
 
 
-def generate_problem(topic: str, difficulty: str = "easy", use_cache: bool = True) -> Problem:
+def generate_problem(
+    topic: Optional[str] = None,
+    difficulty: str = "easy",
+    selected_topics: Optional[List[str]] = None,
+    use_cache: bool = True
+) -> Problem:
     """
     Generate a practice problem using Claude API.
 
     Args:
-        topic: The skill to focus on (e.g., "filter_rows", "group_by", "joins")
+        topic: (Deprecated) Single skill to focus on. Use selected_topics instead.
         difficulty: Problem difficulty ("easy", "medium", "hard")
+        selected_topics: List of topics user selected (empty/None = all topics)
         use_cache: Whether to use cached responses (default True for development)
 
     Returns:
@@ -379,15 +475,31 @@ def generate_problem(topic: str, difficulty: str = "easy", use_cache: bool = Tru
         dataset_topic = select_random_topic()
         print(f"[DEBUG] Using dataset topic: {dataset_topic}")
 
+        # Determine which skills to use based on difficulty
+        if topic:
+            # Legacy single-topic mode (for backward compatibility)
+            skills = [topic]
+            use_cte = False
+            num_ctes = 0
+        else:
+            # Multi-skill mode based on difficulty
+            selected_topics_list = selected_topics if selected_topics else []
+            skills = select_skills_for_difficulty(difficulty, selected_topics_list)
+            use_cte, num_ctes = should_use_cte(difficulty, skills)
+
+        print(f"[DEBUG] Skills selected: {skills}")
+        print(f"[DEBUG] CTE requirement: use_cte={use_cte}, num_ctes={num_ctes}")
+
         # Call API (with or without cache)
         if use_cache:
-            # Using hash of topic+difficulty+dataset_topic as cache key for reproducibility
-            cache_key = hash(f"{topic}_{difficulty}_{dataset_topic}") % 1000
-            response_text = _cached_generate_problem(topic, difficulty, dataset_topic, cache_key)
+            # Using hash of skills+difficulty+dataset_topic as cache key for reproducibility
+            skills_str = "_".join(sorted(skills))  # Sort for consistent caching
+            cache_key = hash(f"{skills_str}_{difficulty}_{dataset_topic}_{use_cte}_{num_ctes}") % 1000
+            response_text = _cached_generate_problem(tuple(skills), difficulty, dataset_topic, use_cte, num_ctes, cache_key)
         else:
             try:
                 client = get_client()
-                prompt = build_problem_generation_prompt(topic, difficulty, dataset_topic)
+                prompt = build_problem_generation_prompt(skills, difficulty, dataset_topic, use_cte, num_ctes)
                 response = client.messages.create(
                     model=DEFAULT_MODEL,
                     max_tokens=2000,

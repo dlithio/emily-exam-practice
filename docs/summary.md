@@ -77,8 +77,8 @@ This is a Streamlit-based educational application that generates pandas and SQL 
 **Purpose:** Generate problems via Claude API
 
 **Key Functions:**
-- `generate_problem(topic, difficulty, use_cache)` → Problem
-- `build_problem_generation_prompt(topic, difficulty, dataset_topic)` → str
+- `generate_problem(topic, difficulty, selected_topics, use_cache)` → Problem
+- `build_problem_generation_prompt(skills, difficulty, dataset_topic, use_cte, num_ctes)` → str
 - `select_random_topic()` → str
 - Helper functions: get_api_key(), get_client(), strip_markdown_code_blocks()
 
@@ -86,16 +86,23 @@ This is a Streamlit-based educational application that generates pandas and SQL 
 
 **Prompt Design:**
 - Plain English questions (no SQL/pandas terminology)
-- Easy = ONE operation only
+- Easy = ONE operation only, Medium = 2-3 skills, Hard = 3-4 skills
 - JSON structured output with pandas_solution and sql_solution fields
 - Must be solvable in both pandas AND SQL
 - Random dataset topic selection for variety (integrated in Step 8.2)
 - Reference solutions: pandas assigns to 'result', SQL is complete SELECT query
+- Multi-skill combination guidance with natural examples
+- CTE requirements for medium/hard problems (optional for medium, required for hard)
 - Derived column subtypes:
   - Easy difficulty: Arithmetic (math operations), Conditional (boolean/category)
   - Medium/Hard: Also includes Date (extract date components)
 
-**Dependencies:** `models.py` (Problem), `dataset_topics.py` (get_random_topic)
+**Integration (Step 10.2):**
+- Uses `difficulty_manager` to select skills and determine CTE requirements
+- Generates multi-skill problems for medium/hard difficulty
+- Backward compatible with single-topic mode
+
+**Dependencies:** `models.py` (Problem), `dataset_topics.py` (get_random_topic), `difficulty_manager.py` (select_skills_for_difficulty, should_use_cte)
 
 ---
 
@@ -160,7 +167,7 @@ This is a Streamlit-based educational application that generates pandas and SQL 
 
 **Import Chain:**
 - `app.py` → imports `models.py`, `claude_client.py`
-- `claude_client.py` → imports `models.py`, `dataset_topics.py` (will import `difficulty_manager.py` in Step 10.2)
+- `claude_client.py` → imports `models.py`, `dataset_topics.py`, `difficulty_manager.py`
 - `dataset_topics.py` → standalone library (provides topics)
 - `difficulty_manager.py` → standalone library (provides skill selection logic)
 - Test files → import from `app.py` and `claude_client.py`
@@ -194,22 +201,30 @@ This is a Streamlit-based educational application that generates pandas and SQL 
 
 ## Development Progress
 
-**Completed:** Steps 1.1 through 10.1 (full basic app + topic library + random topic integration + reference solutions + solution verification + reference solutions UI + export/import functionality + derived_column topic with all subtypes fully tested + skill composition logic for medium/hard difficulties)
+**Completed:** Steps 1.1 through 10.2 (full basic app + topic library + random topic integration + reference solutions + solution verification + reference solutions UI + export/import functionality + derived_column topic with all subtypes fully tested + skill composition logic + multi-skill problem generation)
 
-**What's New in Step 10.1:**
-- Created `difficulty_manager.py` with skill composition logic
-- Added `EASY_SKILLS` constant (list of 8 foundational topics)
-- Implemented `select_skills_for_difficulty(difficulty, selected_topics)` function:
-  - Easy: Returns 1 skill
-  - Medium: Returns 2-3 skills
-  - Hard: Returns 3-4 skills
-  - Respects user-selected topics when provided
-- Implemented `should_use_cte(difficulty, skills)` function:
-  - Easy: Never uses CTEs (False, 0)
-  - Medium: 50% chance of 1 CTE
-  - Hard: Always uses CTEs (1-3 based on number of skills)
-- Tested all functions with multiple samples - working correctly
-- Module ready for integration in claude_client.py (Step 10.2)
+**What's New in Step 10.2:**
+- Integrated `difficulty_manager` with `claude_client.py` for multi-skill problem generation
+- Updated `generate_problem()` function:
+  - Now accepts `selected_topics` parameter (list of user-selected topics)
+  - Uses `select_skills_for_difficulty()` to determine which skills to combine
+  - Uses `should_use_cte()` to determine CTE requirements
+  - Backward compatible with legacy single-topic mode
+  - Logs selected skills and CTE requirements for debugging
+- Updated `build_problem_generation_prompt()` function:
+  - Accepts list of skills instead of single topic
+  - Accepts CTE parameters (use_cte, num_ctes)
+  - Generates multi-skill combination instructions with natural examples
+  - Generates CTE requirement instructions with example structures
+  - Adapts prompt based on number of skills and difficulty level
+- Updated `_cached_generate_problem()` to handle new parameters
+- Added comprehensive multi-skill guidance in prompts:
+  - Natural skill combinations (e.g., derived_column + filter_rows, joins + aggregations)
+  - CTE structure examples (1, 2, or 3 CTEs)
+  - Clear instructions for Claude to combine skills naturally
+- Topic field set to "multi_skill" for problems with multiple skills
+- Tested with medium difficulty: Successfully generates 2-3 skill problems with optional CTEs
+- Tested with easy difficulty: Backward compatibility maintained (single skill, no CTEs)
 
 **What's New in Step 8.6:**
 - Added "Export Problem" button in sidebar "Save & Share" section
@@ -252,9 +267,8 @@ This is a Streamlit-based educational application that generates pandas and SQL 
 - All three subtypes generate valid problems solvable in both pandas and SQL
 
 **Next Up (new-steps.md):**
-- Step 10.2: Update problem generation for multi-skill (integrate difficulty_manager with Claude API)
-- Step 10.3: Update UI for difficulty selection (add radio buttons)
-- Step 10.4: Test medium difficulty problems
+- Step 10.3: Update UI for difficulty selection (add radio buttons and pass parameters to generate_problem)
+- Step 10.4: Test medium difficulty problems end-to-end in the UI
 - Step 11: Hard difficulty (3-4 skills + advanced topics like pivot/melt/cross_join)
 
 ---
