@@ -44,6 +44,7 @@ This is a Streamlit-based educational application that generates pandas and SQL 
 
 **Critical Features:**
 - 5-second execution timeout for user code safety
+- Difficulty selector (Easy, Medium, Hard) - controls skill composition
 - Multi-topic checkbox selector (empty = all topics)
 - "Reveal Problem Info" button (hides topic/difficulty until clicked)
 - "Show Reference Solutions" button (displays Claude's verified pandas and SQL solutions in expandable sections)
@@ -52,8 +53,14 @@ This is a Streamlit-based educational application that generates pandas and SQL 
 - Robust API error handling (keeps previous problem on failure)
 - Session state for persistence across reruns
 - Automatic verification of Claude's reference solutions with logging
+- Generic loading messages (never reveal difficulty or topics before problem is revealed)
 
 **Available Topics:** filter_columns, filter_rows, aggregations, distinct, joins, order_by, limit, derived_column
+
+**Difficulty Levels:**
+- Easy: 1 skill, no CTEs
+- Medium: 2-3 skills, 50% chance of 1 CTE
+- Hard: 3-4 skills, always uses CTEs (1-3 depending on complexity)
 
 **Dependencies:** `models.py` (Problem), `claude_client.py` (generate_problem)
 
@@ -201,7 +208,18 @@ This is a Streamlit-based educational application that generates pandas and SQL 
 
 ## Development Progress
 
-**Completed:** Steps 1.1 through 10.2 (full basic app + topic library + random topic integration + reference solutions + solution verification + reference solutions UI + export/import functionality + derived_column topic with all subtypes fully tested + skill composition logic + multi-skill problem generation)
+**Completed:** Steps 1.1 through 10.3 (full basic app + topic library + random topic integration + reference solutions + solution verification + reference solutions UI + export/import functionality + derived_column topic with all subtypes fully tested + skill composition logic + multi-skill problem generation + difficulty selection UI)
+
+**What's New in Step 10.3:**
+- Added difficulty selector radio buttons in sidebar (Easy, Medium, Hard)
+- Difficulty selection stored in session state
+- Updated all `generate_problem()` calls to pass `difficulty` and `selected_topics` parameters
+- Removed legacy single-topic selection logic (now using skill composition from difficulty_manager)
+- Updated problem info display to show "Multiple Skills" for multi_skill problems
+- Generic loading message: "Generating practice problem..." (doesn't reveal difficulty or topics)
+- Problem difficulty and skills only shown after clicking "Reveal Problem Info"
+- Users can now select difficulty level before generating problems
+- Medium and Hard difficulties will generate multi-skill problems (2-3 skills for medium, 3-4 for hard)
 
 **What's New in Step 10.2:**
 - Integrated `difficulty_manager` with `claude_client.py` for multi-skill problem generation
@@ -267,7 +285,6 @@ This is a Streamlit-based educational application that generates pandas and SQL 
 - All three subtypes generate valid problems solvable in both pandas and SQL
 
 **Next Up (new-steps.md):**
-- Step 10.3: Update UI for difficulty selection (add radio buttons and pass parameters to generate_problem)
 - Step 10.4: Test medium difficulty problems end-to-end in the UI
 - Step 11: Hard difficulty (3-4 skills + advanced topics like pivot/melt/cross_join)
 

@@ -345,16 +345,18 @@ if 'solutions_revealed' not in st.session_state:
     st.session_state.solutions_revealed = False
 if 'last_uploaded_file_id' not in st.session_state:
     st.session_state.last_uploaded_file_id = None
+if 'difficulty' not in st.session_state:
+    st.session_state.difficulty = "easy"
 
 # Generate problem on first load
 if st.session_state.current_problem is None:
     with st.spinner("Generating your first problem..."):
         try:
-            # Generate a problem with a random foundational topic
-            # Start with filter_rows as it's the first foundational topic
+            # Generate a problem with difficulty from session state
+            # For first load, use easy difficulty with no specific topic
             problem = generate_problem(
-                topic="filter_rows",
-                difficulty="easy",
+                difficulty=st.session_state.difficulty,
+                selected_topics=[],
                 use_cache=True
             )
 
@@ -417,6 +419,20 @@ st.markdown("""
 with st.sidebar:
     st.header("Problem Generator")
 
+    # Difficulty selector
+    st.subheader("Select Difficulty:")
+    difficulty = st.radio(
+        "Difficulty Level:",
+        options=["Easy", "Medium", "Hard"],
+        index=0,
+        horizontal=True,
+        label_visibility="collapsed"
+    )
+    # Store lowercase version in session state
+    st.session_state.difficulty = difficulty.lower()
+
+    st.divider()
+
     # Topic selector with checkboxes
     st.subheader("Select Topics to Practice:")
     st.caption("Select topics to focus on (or leave all unchecked for random)")
@@ -453,27 +469,16 @@ with st.sidebar:
         st.session_state.solutions_revealed = False  # Hide solutions for new problem
         st.session_state.last_uploaded_file_id = None  # Reset file uploader
 
-        # Determine which topics to choose from
-        if st.session_state.selected_topics:
-            # Use only selected topics
-            available_topics = st.session_state.selected_topics
-        else:
-            # No topics selected, use all topics
-            available_topics = TOPICS
-
-        # Choose a random topic from available topics
-        topic = random.choice(available_topics)
-
         # Generate new problem
         # Never reveal the topic in messages - user must click "Reveal Problem Info"
-        spinner_message = "Generating new problem..."
+        spinner_message = "Generating practice problem..."
         success_message = "✓ New problem generated!"
 
         with st.spinner(spinner_message):
             try:
                 new_problem = generate_problem(
-                    topic=topic,
-                    difficulty="easy",
+                    difficulty=st.session_state.difficulty,
+                    selected_topics=st.session_state.selected_topics,
                     use_cache=False  # Don't use cache for new problems
                 )
 
@@ -481,19 +486,20 @@ with st.sidebar:
                 verification = verify_problem_solutions(new_problem)
 
                 # Log verification results
+                problem_label = f"{new_problem.difficulty} difficulty, topic: {new_problem.topic}"
                 if not verification['pandas_valid']:
-                    logger.warning(f"Pandas solution verification failed for topic '{topic}'")
+                    logger.warning(f"Pandas solution verification failed for {problem_label}")
                     logger.warning(f"Pandas error: {verification['pandas_error']}")
                     logger.warning(f"Pandas feedback: {verification['pandas_feedback']}")
                 else:
-                    logger.info(f"Pandas solution verified successfully for topic '{topic}'")
+                    logger.info(f"Pandas solution verified successfully for {problem_label}")
 
                 if not verification['sql_valid']:
-                    logger.warning(f"SQL solution verification failed for topic '{topic}'")
+                    logger.warning(f"SQL solution verification failed for {problem_label}")
                     logger.warning(f"SQL error: {verification['sql_error']}")
                     logger.warning(f"SQL feedback: {verification['sql_feedback']}")
                 else:
-                    logger.info(f"SQL solution verified successfully for topic '{topic}'")
+                    logger.info(f"SQL solution verified successfully for {problem_label}")
 
                 # Accept the problem even if verification fails (for MVP)
                 # Only update current problem if generation succeeded
@@ -632,9 +638,16 @@ with col3:
 
 # Show problem info if revealed
 if st.session_state.problem_info_revealed and st.session_state.current_problem:
-    topic_display = st.session_state.current_problem.topic.replace("_", " ").title()
     difficulty_display = st.session_state.current_problem.difficulty.title() if st.session_state.current_problem.difficulty else "Easy"
-    st.info(f"📚 **Topic:** {topic_display} | **Difficulty:** {difficulty_display}")
+
+    # Display skills/topic
+    if st.session_state.current_problem.topic == "multi_skill":
+        # For multi-skill problems, try to infer skills or show as "Multiple Skills"
+        st.info(f"📚 **Skills:** Multiple Skills | **Difficulty:** {difficulty_display}")
+    else:
+        # For single-skill problems, show the topic
+        topic_display = st.session_state.current_problem.topic.replace("_", " ").title()
+        st.info(f"📚 **Topic:** {topic_display} | **Difficulty:** {difficulty_display}")
 
 # Show reference solutions if revealed
 if st.session_state.solutions_revealed and st.session_state.current_problem:
