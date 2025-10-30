@@ -119,20 +119,20 @@ def build_problem_generation_prompt(topic: str, difficulty: str = "easy") -> str
 
     # Map topics to more descriptive names for the prompt
     topic_descriptions = {
-        "filter_columns": "selecting specific columns (SELECT in SQL, df[[]] in pandas)",
-        "filter_rows": "filtering rows based on conditions (WHERE in SQL, df[condition] in pandas)",
-        "group_by": "aggregating data with GROUP BY (groupby in pandas)",
-        "distinct": "finding distinct/unique values (DISTINCT in SQL, unique/drop_duplicates in pandas)",
-        "joins": "joining tables (JOIN in SQL, merge in pandas)",
-        "order_by": "sorting data (ORDER BY in SQL, sort_values in pandas)",
-        "limit": "limiting number of results (LIMIT in SQL, head in pandas)",
+        "filter_columns": "selecting/choosing specific columns from a table",
+        "filter_rows": "finding rows that meet certain conditions or criteria",
+        "aggregations": "calculating summary statistics (totals, averages, counts) for groups of data",
+        "distinct": "finding unique/non-repeating values",
+        "joins": "combining information from two related tables",
+        "order_by": "arranging data in a specific order (ascending or descending)",
+        "limit": "showing only the first few rows of results",
     }
 
     topic_desc = topic_descriptions.get(topic, topic)
 
     # Difficulty guidelines
     difficulty_guidelines = {
-        "easy": "Keep the problem simple with a single operation on small data (3-5 rows). Use clear, straightforward conditions.",
+        "easy": "SINGLE OPERATION ONLY. Test exactly ONE concept on small data (3-5 rows). No combining multiple operations. Use clear, straightforward conditions.",
         "medium": "Use 2-3 combined operations on medium-sized data (5-10 rows). Include slightly more complex logic.",
         "hard": "Create a multi-step problem with larger data (10-15 rows), edge cases, and complex conditions."
     }
@@ -150,6 +150,35 @@ REQUIREMENTS:
 
 TOPIC FOCUS: {topic}
 {topic_desc}
+
+CRITICAL REQUIREMENT - PLAIN ENGLISH ONLY:
+- Write the question in PLAIN ENGLISH that anyone could understand
+- DO NOT use SQL terminology (no "JOIN", "GROUP BY", "SELECT", "WHERE", "ORDER BY", "LIMIT", "DISTINCT", etc.)
+- DO NOT use pandas terminology (no "merge", "groupby", "filter", "sort_values", etc.)
+- DO NOT mention programming concepts or function names
+- Use everyday language like: "show", "find", "list", "combine", "calculate", "arrange", "get", "display"
+- Describe WHAT the user should accomplish, not HOW to do it technically
+
+BAD EXAMPLES (too technical):
+- "Join the customers and orders tables using an inner join"
+- "Group by product and calculate total revenue"
+- "Use WHERE to filter rows where salary > 70000"
+
+GOOD EXAMPLES (plain English):
+- "Show all orders along with the customer's name and city for each order"
+- "For each product, calculate the total revenue"
+- "Find all employees earning more than $70,000"
+
+ADDITIONAL REQUIREMENT FOR EASY DIFFICULTY:
+If difficulty is "easy", the problem should test EXACTLY ONE concept:
+- For filter_rows: Just filtering, nothing else (no sorting, no aggregations)
+- For aggregations: Just one aggregation operation (e.g., just sum OR just count, not both)
+- For joins: Just combining tables, no additional filtering or calculations
+- For order_by: Just sorting, no calculations
+DO NOT combine multiple concepts in easy problems. For example, DON'T ask users to:
+- Calculate a new column AND group AND sort (that's 3 operations)
+- Filter AND join (that's 2 operations)
+Easy = One operation only.
 
 Return your response as a JSON object with this EXACT structure:
 {{
@@ -195,7 +224,7 @@ Example JSON format (for reference only - generate a NEW problem):
       ]
     }}
   }},
-  "question": "Find all employees in the Engineering department.",
+  "question": "Show all employees who work in the Engineering department.",
   "expected_output": {{
     "columns": ["name", "department", "salary"],
     "data": [

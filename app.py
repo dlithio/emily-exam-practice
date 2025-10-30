@@ -2,9 +2,22 @@ import streamlit as st
 import pandas as pd
 import sqlite3
 import traceback
+import random
 from typing import Tuple, Optional
 from models import Problem
 from claude_client import generate_problem
+
+
+# Available topics from the plan (foundational topics)
+TOPICS = [
+    "filter_columns",
+    "filter_rows",
+    "aggregations",
+    "distinct",
+    "joins",
+    "order_by",
+    "limit"
+]
 
 
 def execute_pandas(code: str, input_tables: dict[str, pd.DataFrame]) -> Tuple[Optional[pd.DataFrame], Optional[str]]:
@@ -186,7 +199,7 @@ def display_problem(problem: Problem) -> None:
     st.subheader("Input Tables")
     for table_name, df in problem.input_tables.items():
         st.write(f"**Table: `{table_name}`**")
-        st.dataframe(df, width='stretch')
+        st.table(df)
         st.write("")  # Add spacing between tables
 
     # Note: We intentionally hide the expected_output - that's the answer!
@@ -205,6 +218,10 @@ if 'show_expected' not in st.session_state:
     st.session_state.show_expected = False
 if 'current_problem' not in st.session_state:
     st.session_state.current_problem = None
+if 'user_code' not in st.session_state:
+    st.session_state.user_code = ""
+if 'selected_topic' not in st.session_state:
+    st.session_state.selected_topic = "Random"
 
 # Generate problem on first load
 if st.session_state.current_problem is None:
@@ -235,6 +252,48 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
+# Sidebar: Topic Selection and New Problem Button
+with st.sidebar:
+    st.header("Problem Generator")
+
+    # Topic selector
+    topic_options = ["Random"] + TOPICS
+    selected_topic = st.selectbox(
+        "Select Topic:",
+        options=topic_options,
+        index=topic_options.index(st.session_state.selected_topic) if st.session_state.selected_topic in topic_options else 0
+    )
+    st.session_state.selected_topic = selected_topic
+
+    # New problem button
+    if st.button("Generate New Problem", type="primary", use_container_width=True):
+        # Clear previous results and code
+        st.session_state.result_df = None
+        st.session_state.error_message = None
+        st.session_state.is_correct = None
+        st.session_state.feedback_message = None
+        st.session_state.show_expected = False
+        st.session_state.user_code = ""
+
+        # Determine which topic to use
+        if st.session_state.selected_topic == "Random":
+            topic = random.choice(TOPICS)
+        else:
+            topic = st.session_state.selected_topic
+
+        # Generate new problem
+        with st.spinner("Generating new problem..."):
+            try:
+                st.session_state.current_problem = generate_problem(
+                    topic=topic,
+                    difficulty="easy",
+                    use_cache=False  # Don't use cache for new problems
+                )
+                st.success("New problem generated!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Failed to generate problem: {e}")
+
 # Problem Section
 st.header("Problem")
 display_problem(st.session_state.current_problem)
@@ -252,9 +311,14 @@ language = st.radio(
 # Code input
 user_code = st.text_area(
     "Enter your code:",
+    value=st.session_state.user_code,
     height=200,
-    placeholder="# Write your Pandas code here..." if language == "Pandas" else "-- Write your SQL query here..."
+    placeholder="# Write your Pandas code here..." if language == "Pandas" else "-- Write your SQL query here...",
+    key="code_input"
 )
+
+# Update session state with current code
+st.session_state.user_code = user_code
 
 # Run button
 run_button = st.button("Run Code", type="primary")
@@ -308,7 +372,7 @@ elif st.session_state.result_df is not None:
         st.success(st.session_state.feedback_message)
         # Show user's output
         st.subheader("Your Output:")
-        st.dataframe(st.session_state.result_df)
+        st.table(st.session_state.result_df)
     elif st.session_state.is_correct is False:
         st.error(st.session_state.feedback_message)
 
@@ -316,11 +380,11 @@ elif st.session_state.result_df is not None:
         col1, col2 = st.columns(2)
         with col1:
             st.subheader("Your Output:")
-            st.dataframe(st.session_state.result_df)
+            st.table(st.session_state.result_df)
         with col2:
             st.subheader("Expected Output:")
             if st.session_state.show_expected:
-                st.dataframe(st.session_state.current_problem.expected_output)
+                st.table(st.session_state.current_problem.expected_output)
             else:
                 if st.button("Show Expected Output"):
                     st.session_state.show_expected = True
@@ -328,6 +392,6 @@ elif st.session_state.result_df is not None:
     else:
         # Execution successful but no comparison result (shouldn't happen)
         st.subheader("Your Output:")
-        st.dataframe(st.session_state.result_df)
+        st.table(st.session_state.result_df)
 else:
     st.write("Your results will appear here after running your code.")
